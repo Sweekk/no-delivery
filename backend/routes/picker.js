@@ -11,4 +11,4 @@ router.patch('/order/:order_id/status', pickerController.updateOrderStatus);
 router.patch('/item/:list_id', pickerController.updateItemStatus);
 router.post('/order/:order_id/complete', pickerController.completeOrder);
 
-module.exports = router;
+module.exports = router
