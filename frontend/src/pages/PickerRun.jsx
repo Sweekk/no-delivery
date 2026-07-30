@@ -10,7 +10,7 @@ export default function PickerRun() {
   const fetchOrders = async () => {
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:5000/api/picker/orders');
+      const res = await fetch('http://localhost:5000/api/picker/orders', { cache: 'no-store' });
       if (!res.ok) throw new Error('Failed to fetch orders');
       const data = await res.json();
       setOrders(data);
@@ -32,8 +32,8 @@ export default function PickerRun() {
   const handleSelectOrder = async (orderId, currentStatus) => {
     try {
       // "such that when the receipt is clicked it is updated to order received"
-      // Update status if it's currently 'pending'
-      if (currentStatus === 'pending') {
+      // Update status if it's currently 'pending' or 'pending_pick'
+      if (currentStatus === 'pending' || currentStatus === 'pending_pick') {
         const updateRes = await fetch(`http://localhost:5000/api/picker/order/${orderId}/status`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -105,31 +105,34 @@ export default function PickerRun() {
               hour: '2-digit', minute: '2-digit'
             });
 
-            let statusBadge = (
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20 font-sans">
-                Pending Pick
+            let textStatus = 'Pending Pick';
+            let badgeClass = 'bg-amber-500/10 text-amber-400 border border-amber-500/20';
+            let borderClass = 'border-slate-800 hover:border-indigo-500/50 hover:shadow-indigo-500/5';
+            let ribbonColor = 'bg-amber-500';
+
+            const s = (order.order_status || '').toLowerCase();
+            if (s === 'picked' || s === 'completed' || s === 'finalized') {
+              textStatus = 'Picked';
+              badgeClass = 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
+              borderClass = 'border-slate-800 opacity-75 hover:opacity-100 hover:border-slate-700';
+              ribbonColor = 'bg-emerald-500';
+            } else if (s === 'delivered') {
+              textStatus = 'Delivered';
+              badgeClass = 'bg-violet-500/10 text-violet-400 border border-violet-500/20';
+              borderClass = 'border-slate-800 opacity-60 hover:opacity-90 hover:border-slate-700';
+              ribbonColor = 'bg-violet-500';
+            } else if (s === 'order received' || s === 'picking' || s.includes('picking') || s.includes('receiv') || s.includes('progress') || s.includes('process')) {
+              textStatus = s === 'order received' ? 'Order Received' : 'Picking';
+              badgeClass = 'bg-blue-500/10 text-blue-400 border border-blue-500/20 animate-pulse';
+              borderClass = 'border-blue-900/60 hover:border-blue-500/80 hover:shadow-blue-500/5';
+              ribbonColor = 'bg-blue-500';
+            }
+
+            const statusBadge = (
+              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${badgeClass} font-sans`}>
+                {textStatus}
               </span>
             );
-            let borderClass = "border-slate-800 hover:border-indigo-500/50 hover:shadow-indigo-500/5";
-            let ribbonColor = "bg-amber-500";
-
-            if (order.order_status === 'order received') {
-              statusBadge = (
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 animate-pulse font-sans">
-                  Order Received
-                </span>
-              );
-              borderClass = "border-blue-900/60 hover:border-blue-500/80 hover:shadow-blue-500/5";
-              ribbonColor = "bg-blue-500";
-            } else if (order.order_status === 'picked') {
-              statusBadge = (
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-sans">
-                  Picked
-                </span>
-              );
-              borderClass = "border-slate-800 opacity-75 hover:opacity-100 hover:border-slate-700";
-              ribbonColor = "bg-emerald-500";
-            }
 
             return (
               <div 

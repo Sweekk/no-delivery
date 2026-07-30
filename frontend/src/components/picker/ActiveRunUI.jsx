@@ -12,7 +12,7 @@ export default function ActiveRunUI({ orderId, onBack }) {
     const fetchOrderDetails = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`http://localhost:5000/api/picker/order/${orderId}`);
+        const res = await fetch(`http://localhost:5000/api/picker/order/${orderId}`, { cache: 'no-store' });
         if (!res.ok) throw new Error('Failed to retrieve order items.');
         const data = await res.json();
         setOrder(data);
@@ -29,12 +29,29 @@ export default function ActiveRunUI({ orderId, onBack }) {
     fetchOrderDetails();
   }, [orderId]);
 
-  const handleSetStatus = (listId, newStatus) => {
+  const handleSetStatus = async (listId, newStatus) => {
+    // 1. Optimistically update local UI state
     setItems((prevItems) =>
       prevItems.map((item) =>
         item.list_id === listId ? { ...item, status: newStatus } : item
       )
     );
+
+    // 2. Persist update to DB immediately in the background
+    try {
+      const res = await fetch(`http://localhost:5000/api/picker/item/${listId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.message || `Failed to sync item update.`);
+      }
+    } catch (err) {
+      console.error('Error syncing status to DB:', err);
+      setError(err.message || 'Failed to sync status change to database.');
+    }
   };
 
   const handleSubmit = async () => {
@@ -45,23 +62,6 @@ export default function ActiveRunUI({ orderId, onBack }) {
       if (pendingCount > 0) {
         throw new Error(`Cannot submit. There are still ${pendingCount} pending items in the checklist.`);
       }
-
-      // Perform updates for each item status
-      const updatePromises = items.map((item) =>
-        fetch(`http://localhost:5000/api/picker/item/${item.list_id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: item.status })
-        }).then(async (res) => {
-          if (!res.ok) {
-            const errData = await res.json();
-            throw new Error(errData.message || `Failed to update item: ${item.item_id}`);
-          }
-          return res.json();
-        })
-      );
-
-      await Promise.all(updatePromises);
 
       // Finalize the order picking
       const completeRes = await fetch(`http://localhost:5000/api/picker/order/${orderId}/complete`, {
@@ -80,7 +80,7 @@ export default function ActiveRunUI({ orderId, onBack }) {
       }, 2000);
     } catch (err) {
       console.error(err);
-      setError(err.message || 'An error occurred while saving picking choices.');
+      setError(err.message || 'An error occurred while finalizing order picking.');
     } finally {
       setSaving(false);
     }
@@ -173,6 +173,7 @@ export default function ActiveRunUI({ orderId, onBack }) {
             const isPending = item.status === 'pending';
             const isFound = item.status === 'found';
             const isNotFound = item.status === 'not_found';
+            const isReplaced = item.status === 'replaced';
 
             let itemBg = "bg-slate-900/20 border-slate-800";
             let statusIndicator = (
@@ -193,6 +194,13 @@ export default function ActiveRunUI({ orderId, onBack }) {
               statusIndicator = (
                 <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-red-500/10 text-red-400 border border-red-500/20 font-sans">
                   Not Found
+                </span>
+              );
+            } else if (isReplaced) {
+              itemBg = "bg-indigo-950/10 border-indigo-900/40 shadow-sm shadow-indigo-950/5";
+              statusIndicator = (
+                <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 font-sans">
+                  Replaced
                 </span>
               );
             }

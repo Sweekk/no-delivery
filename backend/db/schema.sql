@@ -1,29 +1,28 @@
--- Table definitions for Supabase (PostgreSQL)
-
--- Example tables for no-delivery system
-CREATE TABLE IF NOT EXISTS orders (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-  status VARCHAR(50) NOT NULL DEFAULT 'pending',
-  customer_id UUID,
-  picker_id UUID,
-  total_amount NUMERIC(10, 2)
+-- 1. Create the store_table first (since order_table depends on it)
+CREATE TABLE store_table (
+    store_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    store_name TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS order_items (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  order_id UUID REFERENCES orders(id) ON DELETE CASCADE,
-  product_id UUID,
-  quantity INT NOT NULL DEFAULT 1,
-  status VARCHAR(50) NOT NULL DEFAULT 'pending', -- e.g., picked, substitute_requested, resolved
-  substitute_product_id UUID
+-- 2. Create or Update the order_table
+CREATE TABLE order_table (
+    order_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    order_status TEXT NOT NULL DEFAULT 'pending_pick',
+    order_date TIMESTAMPTZ DEFAULT NOW(),
+    store_id UUID REFERENCES store_table(store_id),
+    customer_id UUID, -- Assuming customers also use UUIDs
+    picker_id UUID,   -- Assuming pickers also use UUIDs
+    total_amount DECIMAL(10, 2) DEFAULT 0.00
 );
 
-CREATE TABLE IF NOT EXISTS substitutions (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  order_item_id UUID REFERENCES order_items(id) ON DELETE CASCADE,
-  original_product_id UUID,
-  proposed_product_id UUID,
-  status VARCHAR(50) DEFAULT 'pending', -- pending, accepted, rejected, timed_out
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+-- 3. Create or Update the item_table
+CREATE TABLE item_table (
+    list_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    order_id UUID REFERENCES order_table(order_id) ON DELETE CASCADE,
+    item_id TEXT NOT NULL,
+    sub_rules TEXT CHECK (sub_rules IN ('auto', 'skip', 'ask')),
+    qty_requested INTEGER NOT NULL DEFAULT 1,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'found', 'not_found', 'replaced')),
+    replacement_item_id TEXT,
+    item_price DECIMAL(10, 2) DEFAULT 0.00
 );
