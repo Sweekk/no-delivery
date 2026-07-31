@@ -1,10 +1,6 @@
 import React from 'react';
-import Dashboard from '../components/admin/Dashboard';
+import { AdminDashboard as DashboardView } from './admin/Dashboard.jsx';
 
-export default function AdminDashboard() {
-  return (
-    <div className="container mx-auto p-4">
-      <Dashboard />
-    </div>
-  );
+export default function AdminDashboard(props) {
+  return <DashboardView {...props} />;
 }
