@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 
+const GOOGLE_MAPS_API_KEY = 'AIzaSyCeL48ioGB--q5S7CJyrHruHbQSviQ4d5U';
+
 export default function LiveLocationMap({ hasActiveOrder = false, destinationAddress = "", destinationCoords = null }) {
   const mapContainerRef = useRef(null);
   const googleMapRef = useRef(null);
@@ -18,6 +20,33 @@ export default function LiveLocationMap({ hasActiveOrder = false, destinationAdd
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [locationNotice, setLocationNotice] = useState(null);
   const [searchError, setSearchError] = useState(null);
+  const [isGoogleLoaded, setIsGoogleLoaded] = useState(false);
+
+  // Dynamic Google Maps Loader
+  useEffect(() => {
+    if (window.google && window.google.maps) {
+      setIsGoogleLoaded(true);
+      return;
+    }
+
+    const existingScript = document.getElementById('google-maps-js-sdk');
+    if (!existingScript) {
+      const script = document.createElement('script');
+      script.id = 'google-maps-js-sdk';
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places`;
+      script.async = true;
+      script.defer = true;
+      script.onload = () => {
+        setIsGoogleLoaded(true);
+      };
+      script.onerror = () => {
+        console.warn('Failed to load Google Maps script, falling back to Leaflet');
+      };
+      document.head.appendChild(script);
+    } else {
+      existingScript.addEventListener('load', () => setIsGoogleLoaded(true));
+    }
+  }, []);
 
   // Initialize Map Engine
   useEffect(() => {
@@ -31,8 +60,8 @@ export default function LiveLocationMap({ hasActiveOrder = false, destinationAdd
         const map = new window.google.maps.Map(mapContainerRef.current, {
           center: { lat: defaultLat, lng: defaultLng },
           zoom: 13,
-          mapTypeControl: false,
-          streetViewControl: false,
+          mapTypeControl: true,
+          streetViewControl: true,
           fullscreenControl: true,
           zoomControl: true,
         });
@@ -101,7 +130,7 @@ export default function LiveLocationMap({ hasActiveOrder = false, destinationAdd
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [hasActiveOrder, destinationAddress, destinationCoords]);
+  }, [isGoogleLoaded, hasActiveOrder, destinationAddress, destinationCoords]);
 
   // Live Geolocation Tracking
   useEffect(() => {
@@ -200,7 +229,7 @@ export default function LiveLocationMap({ hasActiveOrder = false, destinationAdd
     setSearchError(null);
 
     // Google Geocoder
-    if (googleMapRef.current && window.google && window.google.maps.Geocoder) {
+    if (googleMapRef.current && window.google && window.google.maps && window.google.maps.Geocoder) {
       const geocoder = new window.google.maps.Geocoder();
       geocoder.geocode({ address: query }, (results, status) => {
         setSearching(false);
@@ -300,6 +329,9 @@ export default function LiveLocationMap({ hasActiveOrder = false, destinationAdd
           <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
             Google Maps Live Tracking & Route
+            <span className="text-[10px] font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+              API Key Active
+            </span>
           </h3>
           <p className="text-xs text-gray-500">
             {currentCoords ? `Live GPS: ${currentCoords.lat.toFixed(4)}, ${currentCoords.lng.toFixed(4)}` : 'Waiting for GPS position...'}
