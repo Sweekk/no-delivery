@@ -1,5 +1,19 @@
 import React, { useState, useEffect } from 'react';
 
+const PRODUCTS_CATALOG = [
+  { item_id: 'APPLE-FUJI-01', item_name: 'Fuji Apples (Organic)', icon: '🍎' },
+  { item_id: 'MILK-GAL-02', item_name: 'Fresh Milk (1 Gallon)', icon: '🥛' },
+  { item_id: 'BANANA-ORG-03', item_name: 'Organic Bananas (bundle)', icon: '🍌' },
+  { item_id: 'BREAD-WW-04', item_name: 'Whole Wheat Sourdough', icon: '🍞' },
+  { item_id: 'CEREAL-BOX-05', item_name: 'Honey Oat Cereal Box', icon: '🥣' },
+  { item_id: 'EGGS-DOZ-06', item_name: 'Pasture-Raised Eggs (Dozen)', icon: '🥚' }
+];
+
+const getProductName = (id) => {
+  const prod = PRODUCTS_CATALOG.find(p => p.item_id === id);
+  return prod ? `${prod.icon} ${prod.item_name}` : id;
+};
+
 export default function ActiveRunUI({ orderId, onBack }) {
   const [order, setOrder] = useState(null);
   const [items, setItems] = useState([]);
@@ -9,8 +23,8 @@ export default function ActiveRunUI({ orderId, onBack }) {
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
-    const fetchOrderDetails = async () => {
-      setLoading(true);
+    const fetchOrderDetails = async (isBackground = false) => {
+      if (!isBackground) setLoading(true);
       try {
         const res = await fetch(`http://localhost:5000/api/picker/order/${orderId}`, { cache: 'no-store' });
         if (!res.ok) throw new Error('Failed to retrieve order items.');
@@ -20,20 +34,36 @@ export default function ActiveRunUI({ orderId, onBack }) {
         setError(null);
       } catch (err) {
         console.error(err);
-        setError('Failed to load active run details. Please verify database seeding and connection.');
+        if (!isBackground) {
+          setError('Failed to load active run details. Please verify database seeding and connection.');
+        }
       } finally {
-        setLoading(false);
+        if (!isBackground) setLoading(false);
       }
     };
 
     fetchOrderDetails();
+
+    const interval = setInterval(() => {
+      fetchOrderDetails(true);
+    }, 5000);
+
+    return () => clearInterval(interval);
   }, [orderId]);
 
   const handleSetStatus = async (listId, newStatus) => {
+    const targetItem = items.find(item => item.list_id === listId);
+    if (!targetItem) return;
+
+    let statusToSave = newStatus;
+    if (newStatus === 'not_found' && targetItem.sub_rules === 'ask') {
+      statusToSave = 'awaiting_customer';
+    }
+
     // 1. Optimistically update local UI state
     setItems((prevItems) =>
       prevItems.map((item) =>
-        item.list_id === listId ? { ...item, status: newStatus } : item
+        item.list_id === listId ? { ...item, status: statusToSave } : item
       )
     );
 
@@ -42,7 +72,7 @@ export default function ActiveRunUI({ orderId, onBack }) {
       const res = await fetch(`http://localhost:5000/api/picker/item/${listId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus })
+        body: JSON.stringify({ status: statusToSave })
       });
       if (!res.ok) {
         const errData = await res.json();
@@ -59,8 +89,12 @@ export default function ActiveRunUI({ orderId, onBack }) {
     setError(null);
     try {
       const pendingCount = items.filter(item => item.status === 'pending').length;
+      const awaitingCount = items.filter(item => item.status === 'awaiting_customer').length;
       if (pendingCount > 0) {
         throw new Error(`Cannot submit. There are still ${pendingCount} pending items in the checklist.`);
+      }
+      if (awaitingCount > 0) {
+        throw new Error(`Cannot submit. There are still ${awaitingCount} items awaiting customer response.`);
       }
 
       // Finalize the order picking
@@ -111,7 +145,7 @@ export default function ActiveRunUI({ orderId, onBack }) {
     );
   }
 
-  const finishedCount = items.filter(item => item.status !== 'pending').length;
+  const finishedCount = items.filter(item => ['found', 'not_found', 'replaced'].includes(item.status)).length;
   const totalCount = items.length;
   const progressPercent = totalCount > 0 ? Math.round((finishedCount / totalCount) * 100) : 0;
 
@@ -174,6 +208,7 @@ export default function ActiveRunUI({ orderId, onBack }) {
             const isFound = item.status === 'found';
             const isNotFound = item.status === 'not_found';
             const isReplaced = item.status === 'replaced';
+            const isAwaitingCustomer = item.status === 'awaiting_customer';
 
             let itemBg = "bg-slate-900/20 border-slate-800";
             let statusIndicator = (
@@ -203,6 +238,14 @@ export default function ActiveRunUI({ orderId, onBack }) {
                   Replaced
                 </span>
               );
+            } else if (isAwaitingCustomer) {
+              itemBg = "bg-amber-950/10 border-amber-900/40 shadow-sm shadow-amber-950/5 animate-pulse";
+              statusIndicator = (
+                <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20 font-sans flex items-center gap-1.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></div>
+                  Awaiting Customer
+                </span>
+              );
             }
 
             return (
@@ -215,8 +258,13 @@ export default function ActiveRunUI({ orderId, onBack }) {
                     <span className="h-6 w-6 rounded-full bg-slate-800 text-slate-400 text-xs font-semibold flex items-center justify-center font-mono">
                       {index + 1}
                     </span>
-                    <h4 className="text-lg font-semibold text-slate-100 font-sans">
-                      {item.item_id}
+                    <h4 className="text-lg font-semibold text-slate-100 font-sans flex flex-wrap items-center gap-2">
+                      <span>{getProductName(item.item_id)}</span>
+                      {item.replacement_item_id && (
+                        <span className="text-xs font-normal text-indigo-300 bg-indigo-500/10 border border-indigo-500/25 px-2.5 py-0.5 rounded-lg flex items-center gap-1">
+                          🔄 Replaced with <strong className="text-indigo-200 font-semibold">{getProductName(item.replacement_item_id)}</strong>
+                        </span>
+                      )}
                     </h4>
                     {statusIndicator}
                   </div>
@@ -233,26 +281,35 @@ export default function ActiveRunUI({ orderId, onBack }) {
                 </div>
 
                 <div className="pl-9 md:pl-0 flex gap-2 w-full md:w-auto">
-                  <button 
-                    onClick={() => handleSetStatus(item.list_id, 'found')}
-                    className={`flex-1 md:flex-initial flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-                      isFound 
-                        ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/15' 
-                        : 'bg-slate-900/60 hover:bg-slate-800 text-slate-300 border border-slate-800'
-                    }`}
-                  >
-                    ✓ Found
-                  </button>
-                  <button 
-                    onClick={() => handleSetStatus(item.list_id, 'not_found')}
-                    className={`flex-1 md:flex-initial flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-                      isNotFound 
-                        ? 'bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-600/15' 
-                        : 'bg-slate-900/60 hover:bg-slate-800 text-slate-300 border border-slate-800'
-                    }`}
-                  >
-                    ✗ Not Found
-                  </button>
+                  {isAwaitingCustomer ? (
+                    <div className="flex items-center gap-2 text-amber-400 text-sm font-medium bg-amber-950/20 border border-amber-900/30 px-4 py-2 rounded-xl">
+                      <div className="w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full animate-spin"></div>
+                      <span>Waiting on Customer...</span>
+                    </div>
+                  ) : (
+                    <>
+                      <button 
+                        onClick={() => handleSetStatus(item.list_id, 'found')}
+                        className={`flex-1 md:flex-initial flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                          isFound 
+                            ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/15' 
+                            : 'bg-slate-900/60 hover:bg-slate-800 text-slate-300 border border-slate-800'
+                        }`}
+                      >
+                        ✓ Found
+                      </button>
+                      <button 
+                        onClick={() => handleSetStatus(item.list_id, 'not_found')}
+                        className={`flex-1 md:flex-initial flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                          isNotFound 
+                            ? 'bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-600/15' 
+                            : 'bg-slate-900/60 hover:bg-slate-800 text-slate-300 border border-slate-800'
+                        }`}
+                      >
+                        ✗ Not Found
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             );
@@ -271,7 +328,7 @@ export default function ActiveRunUI({ orderId, onBack }) {
 
         <button 
           onClick={handleSubmit}
-          disabled={saving || finishedCount === 0 || success}
+          disabled={saving || items.some(item => item.status === 'pending' || item.status === 'awaiting_customer') || success}
           className="px-6 py-2.5 bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 disabled:from-slate-800 disabled:to-slate-800 disabled:opacity-50 disabled:text-slate-500 text-white rounded-xl text-sm font-semibold shadow-lg shadow-indigo-500/10 hover:shadow-indigo-500/20 active:scale-95 transition-all font-sans"
         >
           {saving ? (
