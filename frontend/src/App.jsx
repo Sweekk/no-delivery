@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import CustomerCheckout from './pages/CustomerCheckout';
 import PickerRun from './pages/PickerRun';
 import AdminDashboard from './pages/AdminDashboard';
+import { login, signup, getToken, getStoredUser, clearSession } from './authApi';
 
 function DeliveryPartnerWorkspace() {
   return (
@@ -73,11 +74,12 @@ function LoginPage({ onAuthenticated }) {
     setConfirmPassword('');
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
     setError('');
 
-    if (!username.trim()) {
+    const trimmedUsername = username.trim();
+    if (!trimmedUsername) {
       setError('Enter a username.');
       return;
     }
@@ -97,8 +99,15 @@ function LoginPage({ onAuthenticated }) {
       }
     }
 
-    // No backend wired up yet — proceed straight to the chosen workspace.
-    onAuthenticated(role, username.trim());
+    const result = mode === 'signup'
+      ? await signup({ username: trimmedUsername, password, role })
+      : await login({ username: trimmedUsername, password });
+
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    onAuthenticated(result.user);
   };
 
   return (
@@ -206,6 +215,7 @@ function LoginPage({ onAuthenticated }) {
 }
 
 export default function App() {
+  const [session, setSession] = useState(() => (getToken() ? getStoredUser() : null));
   const [page, setPage] = useState(null);
 
   useEffect(() => {
@@ -229,11 +239,22 @@ export default function App() {
     setPage(role);
   };
 
-  const handleAuthenticated = (role /*, username */) => {
-    chooseRole(role);
+  const handleAuthenticated = (user) => {
+    setSession(user);
+    if (user && user.role) {
+      chooseRole(user.role);
+    } else {
+      chooseRole('');
+    }
   };
 
-  if (!page) return <LoginPage onAuthenticated={handleAuthenticated} />;
+  const handleLogout = () => {
+    clearSession();
+    setSession(null);
+    chooseRole('');
+  };
+
+  if (!page || !session) return <LoginPage onAuthenticated={handleAuthenticated} />;
 
   const workspace = workspaces[page];
   const Page = workspace.component;
@@ -244,13 +265,14 @@ export default function App() {
           <div style={styles.brand} aria-label="QuickFIx Grocery Delivery"><span style={styles.brandMark}>Q</span><span>QuickFIx Grocery Delivery</span></div>
           <div style={styles.divider} />
           <div><div style={styles.workspaceLabel}>{workspace.label}</div><div style={styles.workspaceDetail}>{workspace.detail}</div></div>
-          <button type="button" style={styles.switchRole} onClick={() => chooseRole('')}>Switch role</button>
+          <button type="button" style={styles.switchRole} onClick={handleLogout}>Log out</button>
         </div>
       </header>
       <main style={styles.mainContent}><Page /></main>
     </div>
   );
 }
+
 
 const styles = {
   appWrapper: { minHeight: '100vh', backgroundColor: '#f6f8f7', color: '#17211a', fontFamily: "'Plus Jakarta Sans', sans-serif" },

@@ -3,6 +3,7 @@ import SubstitutionChart from "./SubstitutionChart";
 import FulfillmentChart from "./FulfillmentChart";
 import FlaggedStoresPanel from "./FlaggedStoresPanel";
 import NetworkHealthChart from "./NetworkHealthChart";
+import { authFetch } from "../../authApi";
 import "./AdminDashboard.css";
 
 const money = (value) =>
@@ -32,7 +33,7 @@ export default function Dashboard() {
   const loadData = useCallback(async () => {
     try {
       setError("");
-      const response = await fetch("/api/admin/dashboard");
+      const response = await authFetch("/admin/dashboard");
       if (!response.ok) throw new Error("Unable to load dashboard data");
       setData(await response.json());
     } catch (err) {

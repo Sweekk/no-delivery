@@ -1,12 +1,17 @@
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+require('dotenv').config({ path: path.join(__dirname, '.env') });
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const authRoutes = require('./routes/auth');
 const pickerRoutes = require('./routes/picker');
 const app = express();
 
 app.use(cors());
 app.use(express.json());
+
+app.use('/api/auth', authRoutes);
 
 // Picker routes mounted for all client route patterns specified in requirements
 app.use('/api/picker', pickerRoutes);
@@ -25,3 +30,4 @@ const PORT = process.env.PORT || 5001;
 app.listen(PORT, () => {
   console.log(`Backend server running on port ${PORT}`);
 });
+
