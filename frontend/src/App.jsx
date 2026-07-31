@@ -2,20 +2,7 @@ import React, { useEffect, useState } from 'react';
 import CustomerCheckout from './pages/CustomerCheckout';
 import PickerRun from './pages/PickerRun';
 import AdminDashboard from './pages/AdminDashboard';
-
-function DeliveryPartnerWorkspace() {
-  return (
-    <section style={styles.deliveryPage}>
-      <p style={styles.eyebrow}>QuickFIx Grocery Delivery</p>
-      <h1 style={styles.deliveryTitle}>Delivery partner workspace</h1>
-      <p style={styles.deliveryCopy}>Your assigned deliveries and route updates will appear here.</p>
-      <div style={styles.deliveryCard}>
-        <strong>No active delivery assigned</strong>
-        <span>We’ll notify you as soon as a grocery order is ready for pickup.</span>
-      </div>
-    </section>
-  );
-}
+import DeliveryPartnerWorkspace from './pages/DeliveryPartnerWorkspace';
 
 const workspaces = {
   customer: { label: 'Customer workspace', detail: 'Your grocery order', component: CustomerCheckout },
