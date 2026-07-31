@@ -58,389 +58,347 @@ export default function CustomerCheckout() {
     async function pollOrder() {
       try {
         const res = await fetch(`/api/customer/order/${selectedOrderId}`);
-        if (!res.ok) return;
-        const data = await res.json();
-        if (isMounted) {
+        if (res.ok && isMounted) {
+          const data = await res.json();
           setActiveOrder(data);
         }
       } catch (err) {
-        console.error('Polling error:', err);
+        console.error('Error polling order:', err);
       }
     }
 
     pollOrder();
-    const interval = setInterval(pollOrder, 5000);
+    const interval = setInterval(pollOrder, 3000);
     return () => {
       isMounted = false;
       clearInterval(interval);
     };
   }, [selectedOrderId, activeTab]);
 
-  const showNotification = (message, type = 'success') => {
-    setNotification({ message, type });
-    setTimeout(() => setNotification(null), 5000);
-  };
-
   const handleAddToCart = () => {
-    const product = MOCK_PRODUCTS.find(p => p.uuid === selectedProductId || p.name === selectedProductId);
-    if (!product) {
-      showNotification('Please select a product first', 'error');
-      return;
-    }
+    if (!selectedProductId) return;
+    const prod = MOCK_PRODUCTS.find(p => p.uuid === selectedProductId);
+    if (!prod) return;
 
-    // Check if product is already in cart
-    const existingIndex = cart.findIndex(item => item.item_id === product.uuid);
-    if (existingIndex > -1) {
-      const newCart = [...cart];
-      newCart[existingIndex].qty_requested += Number(selectedQty);
-      setCart(newCart);
-    } else {
-      setCart([
-        ...cart,
-        {
-          item_id: product.uuid,
-          name: product.name,
-          qty_requested: Number(selectedQty),
-          sub_rules: selectedSubRule,
-          item_price: product.price
-        }
-      ]);
-    }
+    setCart(prev => {
+      const existingIndex = prev.findIndex(item => item.item_id === prod.uuid);
+      if (existingIndex > -1) {
+        const updated = [...prev];
+        updated[existingIndex].qty_requested += selectedQty;
+        return updated;
+      }
+      return [...prev, {
+        item_id: prod.uuid,
+        name: prod.name,
+        price: prod.price,
+        qty_requested: selectedQty,
+        sub_rules: selectedSubRule
+      }];
+    });
 
-    showNotification(`Added ${product.name} to cart.`);
+    setNotification({ type: 'success', message: `Added ${prod.name} (x${selectedQty}) to cart.` });
+    setTimeout(() => setNotification(null), 3000);
   };
 
   const handleRemoveFromCart = (index) => {
-    const newCart = cart.filter((_, i) => i !== index);
-    setCart(newCart);
+    setCart(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const calculateSubtotal = () => {
+    return cart.reduce((sum, item) => sum + (item.price * item.qty_requested), 0);
   };
 
   const handlePlaceOrder = async () => {
-    if (!selectedStoreId) {
-      showNotification('Please select a store', 'error');
-      return;
-    }
     if (cart.length === 0) {
-      showNotification('Your cart is empty', 'error');
+      alert('Your cart is empty! Please add items first.');
       return;
     }
-
-    const totalAmount = cart.reduce((sum, item) => sum + (item.item_price * item.qty_requested), 0);
-    
-    const payload = {
-      store_id: selectedStoreId,
-      customer_id: 'c1111111-1111-1111-1111-111111111111', // default customer UUID
-      total_amount: totalAmount,
-      items: cart.map(item => ({
-        item_id: item.item_id,
-        qty_requested: item.qty_requested,
-        sub_rules: item.sub_rules,
-        item_price: item.item_price
-      }))
-    };
 
     try {
-      const res = await fetch('/api/customer/order', {
+      const payload = {
+        store_id: selectedStoreId || 's0000001-0000-0000-0000-000000000001',
+        total_amount: calculateSubtotal() + 30, // Cart + delivery fee
+        items: cart.map(item => ({
+          item_id: item.item_id,
+          qty_requested: item.qty_requested,
+          sub_rules: item.sub_rules
+        }))
+      };
+
+      const res = await fetch('/api/customer/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
 
+      if (!res.ok) throw new Error('Order creation failed');
       const data = await res.json();
-      if (res.ok && data.order_id) {
-        showNotification('Order placed successfully! Redirecting to tracking...', 'success');
-        setCart([]);
-        
-        // Add to local orders list
-        const storeName = stores.find(s => s.store_id === selectedStoreId)?.store_name || 'Grocery Store';
-        const newOrderRecord = {
-          order_id: data.order_id,
-          store_name: storeName,
-          order_date: new Date().toISOString(),
-          total_amount: totalAmount
-        };
-        setOrderList([newOrderRecord, ...orderList]);
-        
-        // Switch to track tab
-        setSelectedOrderId(data.order_id);
-        setActiveTab('track');
-      } else {
-        showNotification(data.message || 'Failed to place order', 'error');
-      }
+
+      setCart([]);
+      setSelectedOrderId(data.order_id);
+      setActiveTab('track');
+      setNotification({ type: 'success', message: `Order #${data.order_id.substring(0, 8)} placed successfully!` });
+      setTimeout(() => setNotification(null), 4000);
+
+      // Refresh Order History
+      fetchOrdersList();
     } catch (err) {
-      showNotification('Network error while placing order.', 'error');
+      console.error(err);
+      alert('Could not place order. Please try again.');
     }
   };
 
-  // Resolution Handler for Customer Substitutions
+  const fetchOrdersList = async () => {
+    try {
+      const res = await fetch('/api/customer/orders');
+      if (res.ok) {
+        const data = await res.json();
+        setOrderList(data);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'my-orders') {
+      fetchOrdersList();
+    }
+  }, [activeTab]);
+
   const handleResolveSubstitution = async (listId, action, replacementId) => {
     try {
-      const res = await fetch(`/api/customer/item/${listId}/resolve`, {
-        method: 'PATCH',
+      const res = await fetch('/api/substitution/resolve', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action, // 'skip' or 'substitute'
-          replacement_item_id: action === 'substitute' ? (replacementId || generateUUID()) : null
+          list_id: listId,
+          action: action, // 'substitute' or 'skip'
+          replacement_item_id: replacementId
         })
       });
 
-      const data = await res.json();
       if (res.ok) {
-        showNotification(`Successfully resolved item: ${action === 'skip' ? 'Skipped' : 'Substituted'}`);
-        // Manually trigger a refresh of order details
-        const refreshRes = await fetch(`/api/customer/order/${selectedOrderId}`);
-        if (refreshRes.ok) {
-          const freshData = await refreshRes.json();
-          setActiveOrder(freshData);
-        }
-      } else {
-        showNotification(data.message || 'Failed to resolve substitution', 'error');
+        setNotification({ type: 'success', message: `Substitution choice updated successfully!` });
+        setTimeout(() => setNotification(null), 3000);
+        // Force refresh active order
+        const orderRes = await fetch(`/api/customer/order/${selectedOrderId}`);
+        if (orderRes.ok) setActiveOrder(await orderRes.json());
       }
     } catch (err) {
-      showNotification('Error resolving substitution.', 'error');
+      console.error(err);
     }
   };
 
-  const handleSelectOrder = async (orderId) => {
+  const handleSelectOrder = (orderId) => {
     setSelectedOrderId(orderId);
-    setLoadingOrder(true);
-    try {
-      const res = await fetch(`/api/customer/order/${orderId}`);
-      if (res.ok) {
-        const data = await res.json();
-        setActiveOrder(data);
-        setActiveTab('track');
-      } else {
-        showNotification('Order detail not found', 'error');
-      }
-    } catch (err) {
-      showNotification('Error loading order detail', 'error');
-    } finally {
-      setLoadingOrder(false);
-    }
+    setActiveTab('track');
   };
 
-  const getStatusStepClass = (currentStatus, targetStatus) => {
-    const statuses = ['PENDING', 'PICKING', 'AWAITING_SUBSTITUTION', 'FINALIZED', 'ASSIGNED', 'DELIVERED'];
-    const currentIndex = statuses.indexOf(String(currentStatus).toUpperCase());
-    const targetIndex = statuses.indexOf(targetStatus);
-    
-    if (currentIndex === -1) return 'step-pending';
-    if (currentIndex >= targetIndex) {
-      return String(currentStatus).toUpperCase() === 'DELIVERED' || targetStatus === 'DELIVERED'
-        ? 'step-completed-success'
-        : 'step-completed';
-    }
-    return 'step-pending';
+  const getStatusStepClass = (currentStatus, stepStatus) => {
+    const statusOrder = ['PENDING', 'PICKING', 'AWAITING_SUBSTITUTION', 'FINALIZED', 'ASSIGNED', 'DELIVERED'];
+    const currentIndex = statusOrder.indexOf(currentStatus);
+    const stepIndex = statusOrder.indexOf(stepStatus);
+
+    if (currentIndex > stepIndex) return 'completed';
+    if (currentIndex === stepIndex) return 'current';
+    return 'pending';
   };
 
   const getProductNameByUUID = (uuid) => {
-    const prod = MOCK_PRODUCTS.find(p => p.uuid === uuid);
-    return prod ? prod.name : `Product (${uuid.substring(0, 8)})`;
+    const p = MOCK_PRODUCTS.find(item => item.uuid === uuid);
+    return p ? p.name : uuid;
   };
 
   return (
     <div className="customer-page">
-      {/* Toast Notification */}
+      {/* HEADER */}
+      <header className="customer-page-header">
+        <p>QuickFix Grocery</p>
+        <h1>Customer Store Front & Reorder Workspace</h1>
+        <span>Shop local dark stores, manage item substitution rules, and track live order progress.</span>
+      </header>
+
+      {/* NOTIFICATION BANNER */}
       {notification && (
-        <div className={`toast-notification ${notification.type}`}>
-          {notification.type === 'success' ? '✓' : '⚠️'} {notification.message}
+        <div className={`notification-banner ${notification.type}`}>
+          {notification.message}
         </div>
       )}
 
-      <header className="customer-page-header">
-        <p>QuickFIx Grocery Delivery</p>
-        <h1>Customer workspace</h1>
-        <span>Place a grocery order and manage substitution requests.</span>
-      </header>
-
-      {/* Tabs Row */}
+      {/* TAB NAVIGATION */}
       <nav className="tab-navigation">
         <button 
-          type="button" 
           className={`tab-btn ${activeTab === 'shop' ? 'active' : ''}`}
           onClick={() => setActiveTab('shop')}
         >
           🛒 Shop & Checkout
         </button>
         <button 
-          type="button" 
           className={`tab-btn ${activeTab === 'track' ? 'active' : ''}`}
           onClick={() => setActiveTab('track')}
         >
-          📦 Track active order
+          📦 Track Order {selectedOrderId ? `(#${selectedOrderId.substring(0, 6)})` : ''}
         </button>
         <button 
-          type="button" 
           className={`tab-btn ${activeTab === 'my-orders' ? 'active' : ''}`}
           onClick={() => setActiveTab('my-orders')}
         >
-          📋 My orders list
+          📋 Order History
         </button>
       </nav>
 
-      {/* Tab Contents */}
-      <section className="tab-content-panel">
+      {/* MAIN CONTENT AREA */}
+      <section className="customer-content">
         
-        {/* SHOP & CHECKOUT TAB */}
+        {/* SHOPPING TAB */}
         {activeTab === 'shop' && (
           <div className="shop-tab">
-            <div className="shop-grid">
-              
-              {/* Form panel */}
-              <div className="shop-form">
-                <h2>1. Select Store</h2>
-                <div className="form-group">
-                  <select 
-                    value={selectedStoreId} 
-                    onChange={(e) => setSelectedStoreId(e.target.value)}
-                    className="select-input"
-                  >
-                    {stores.length === 0 ? (
-                      <option value="">No stores available</option>
-                    ) : (
-                      stores.map(s => (
-                        <option key={s.store_id} value={s.store_id}>
-                          {s.store_name}
-                        </option>
-                      ))
-                    )}
-                  </select>
-                </div>
+            <div className="store-selector-card">
+              <label>
+                <strong>Select Store Location:</strong>
+                <select 
+                  value={selectedStoreId} 
+                  onChange={(e) => setSelectedStoreId(e.target.value)}
+                  className="input-select"
+                >
+                  {stores.length > 0 ? (
+                    stores.map(s => (
+                      <option key={s.store_id} value={s.store_id}>{s.name} ({s.location})</option>
+                    ))
+                  ) : (
+                    <option value="s0000001-0000-0000-0000-000000000001">Koramangala Dark Store Hub</option>
+                  )}
+                </select>
+              </label>
+            </div>
 
-                <h2>2. Add items to cart</h2>
+            <div className="shop-grid">
+              {/* Product Catalog Card */}
+              <div className="product-catalog-card">
+                <h3>Add Grocery Item</h3>
                 <div className="form-group">
-                  <label htmlFor="product-select">Select Product</label>
-                  <select
-                    id="product-select"
+                  <label>Select Item:</label>
+                  <select 
                     value={selectedProductId}
                     onChange={(e) => setSelectedProductId(e.target.value)}
-                    className="select-input"
+                    className="input-select"
                   >
-                    <option value="">-- Choose Grocery Product --</option>
+                    <option value="">-- Choose Product --</option>
                     {MOCK_PRODUCTS.map(p => (
-                      <option key={p.uuid} value={p.uuid}>
-                        {p.name} - ₹{p.price}
-                      </option>
+                      <option key={p.uuid} value={p.uuid}>{p.name} - ₹{p.price}</option>
                     ))}
                   </select>
                 </div>
 
-                <div className="item-settings-row">
-                  <div className="form-group flex-1">
-                    <label htmlFor="item-qty">Quantity</label>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Quantity:</label>
                     <input 
-                      id="item-qty"
                       type="number" 
                       min="1" 
-                      value={selectedQty}
-                      onChange={(e) => setSelectedQty(e.target.value)}
-                      className="text-input" 
+                      max="10" 
+                      value={selectedQty} 
+                      onChange={(e) => setSelectedQty(parseInt(e.target.value) || 1)}
+                      className="input-number"
                     />
                   </div>
 
-                  <div className="form-group flex-2">
-                    <label htmlFor="sub-rule-select">Substitution Rule</label>
-                    <select
-                      id="sub-rule-select"
+                  <div className="form-group">
+                    <label>If Item is Out of Stock:</label>
+                    <select 
                       value={selectedSubRule}
                       onChange={(e) => setSelectedSubRule(e.target.value)}
-                      className="select-input"
+                      className="input-select"
                     >
-                      <option value="ask">Ask Customer (Approval needed)</option>
-                      <option value="auto">Auto Substitute (Best match)</option>
-                      <option value="skip">Skip Item (Refund)</option>
+                      <option value="ask">Ask Me First (Send Alert)</option>
+                      <option value="substitute_any">Auto-Substitute Best Match</option>
+                      <option value="no_substitute">Do Not Substitute (Refund Item)</option>
                     </select>
                   </div>
                 </div>
 
                 <button 
                   type="button" 
-                  className="btn-add-item" 
+                  className="btn-add-cart"
                   onClick={handleAddToCart}
+                  disabled={!selectedProductId}
                 >
-                  ➕ Add to Cart
+                  + Add to Basket
                 </button>
               </div>
 
-              {/* Cart panel */}
-              <div className="shop-cart">
-                <div className="cart-header">
-                  <h2>Shopping Cart</h2>
-                  <span className="cart-count">{cart.length} items</span>
-                </div>
-
+              {/* Cart & Checkout Summary */}
+              <div className="cart-summary-card">
+                <h3>Basket Summary ({cart.length} items)</h3>
+                
                 {cart.length === 0 ? (
                   <div className="empty-cart-state">
                     <span>🛒</span>
-                    <p>Your cart is empty. Add grocery items from the product panel.</p>
+                    <p>Your basket is empty. Select items on the left to add.</p>
                   </div>
                 ) : (
                   <div className="cart-items-list">
-                    {cart.map((item, index) => (
-                      <div key={item.item_id} className="cart-item-card">
-                        <div className="cart-item-info">
+                    {cart.map((item, idx) => (
+                      <div key={idx} className="cart-item-row">
+                        <div className="item-info">
                           <strong>{item.name}</strong>
-                          <span>
-                            {item.qty_requested} unit(s) · Rule: <span className="rule-badge">{item.sub_rules}</span>
-                          </span>
+                          <span>Qty: {item.qty_requested} · Rule: <em>{item.sub_rules}</em></span>
                         </div>
-                        <div className="cart-item-action">
-                          <span className="item-price">₹{item.item_price * item.qty_requested}</span>
+                        <div className="item-price">
+                          ₹{item.price * item.qty_requested}
                           <button 
                             type="button" 
-                            className="btn-remove"
-                            onClick={() => handleRemoveFromCart(index)}
+                            className="btn-remove-item"
+                            onClick={() => handleRemoveFromCart(idx)}
                           >
                             ✕
                           </button>
                         </div>
                       </div>
                     ))}
-                    
+
                     <div className="cart-totals">
                       <div className="total-row">
-                        <span>Total amount</span>
-                        <strong>₹{cart.reduce((sum, item) => sum + (item.item_price * item.qty_requested), 0)}</strong>
+                        <span>Items Subtotal:</span>
+                        <span>₹{calculateSubtotal()}</span>
                       </div>
-                      <button 
-                        type="button" 
-                        className="btn-checkout" 
-                        onClick={handlePlaceOrder}
-                      >
-                        Place Order 🚀
-                      </button>
+                      <div className="total-row">
+                        <span>Delivery Fee:</span>
+                        <span>₹30</span>
+                      </div>
+                      <div className="total-row grand-total">
+                        <span>Grand Total:</span>
+                        <span>₹{calculateSubtotal() + 30}</span>
+                      </div>
                     </div>
+
+                    <button 
+                      type="button" 
+                      className="btn-place-order"
+                      onClick={handlePlaceOrder}
+                    >
+                      Place Order & Start Fulfillment →
+                    </button>
                   </div>
                 )}
               </div>
-
             </div>
           </div>
         )}
 
-        {/* ACTIVE ORDER TRACKING TAB */}
+        {/* ORDER TRACKING TAB */}
         {activeTab === 'track' && (
           <div className="track-tab">
             {!selectedOrderId ? (
               <div className="empty-orders-state">
-                <span>📦</span>
-                <h3>No order selected for tracking</h3>
-                <p>Place a new order or select an existing order from "My orders list" tab.</p>
-                <button 
-                  type="button" 
-                  className="btn-link"
-                  onClick={() => setActiveTab('my-orders')}
-                >
-                  View My Orders List
-                </button>
+                <span>📍</span>
+                <h3>No Order Selected for Tracking</h3>
+                <p>Place an order or choose an active order from "Order History" to view real-time status.</p>
               </div>
-            ) : loadingOrder ? (
-              <div className="loading-state">Loading active order updates...</div>
             ) : !activeOrder ? (
               <div className="empty-orders-state">
-                <h3>Order not found</h3>
-                <p>Could not retrieve order details for ID: {selectedOrderId}</p>
+                <h3>Loading order details...</h3>
               </div>
             ) : (
               <div className="active-order-dashboard">

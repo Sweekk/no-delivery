@@ -1,622 +1,382 @@
-/* AdminDashboard.css - Theme, Search, Filters, Export & Live Updates */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+/* QuickFix Emerald Admin Dashboard Stylesheet */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
 :root {
-  --admin-bg: #f4f6f9;
-  --sidebar-bg: #1e1e2d;
-  --sidebar-hover: #27273a;
-  --sidebar-active: #2b2b40;
-  --sidebar-text: #a2a3b7;
-  --sidebar-text-active: #ffffff;
-  --card-bg: #ffffff;
-  --card-border: #e6ebf1;
-  --text-main: #181c32;
-  --text-muted: #7e8299;
-  --accent-pink: #ff2a6d;
-  --accent-purple: #7239ea;
-  --accent-blue: #3699ff;
-  --accent-green: #50cd89;
-  --accent-yellow: #ffb800;
+  --metoxi-bg: #f8fafc;
+  --metoxi-sidebar-bg: #ffffff;
+  --metoxi-card-bg: #ffffff;
+  --metoxi-text-dark: #0f172a;
+  --metoxi-text-muted: #64748b;
+  --metoxi-text-light: #94a3b8;
+  --metoxi-border: #e2e8f0;
+  
+  --metoxi-emerald: #0c831f;
+  --metoxi-emerald-dark: #166534;
+  --metoxi-emerald-light: #ecfdf5;
+  --metoxi-badge-bg: #dcfce7;
+  --metoxi-badge-text: #15803d;
 }
 
-.admin-layout {
+.metoxi-layout {
   display: flex;
-  min-height: 100vh;
-  background-color: var(--admin-bg);
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  color: var(--text-main);
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+  background-color: var(--metoxi-bg);
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  color: var(--metoxi-text-dark);
 }
 
-/* Sidebar Styles */
-.admin-sidebar {
-  width: 260px;
-  background-color: var(--sidebar-bg);
+/* Sidebar Styling */
+.metoxi-sidebar {
+  width: 250px;
+  background-color: var(--metoxi-sidebar-bg);
+  border-right: 1px solid var(--metoxi-border);
   display: flex;
   flex-direction: column;
-  flex-shrink: 0;
-  padding: 1.5rem 1rem;
-  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.05);
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  z-index: 50;
+  transition: width 0.2s ease;
 }
 
-.user-profile-widget {
+.metoxi-sidebar-brand {
+  padding: 1.25rem 1.5rem;
   display: flex;
   align-items: center;
-  gap: 0.85rem;
-  margin-bottom: 1.5rem;
-  padding: 0 0.5rem;
+  gap: 0.75rem;
+  font-weight: 800;
+  font-size: 1.2rem;
+  color: var(--metoxi-emerald-dark);
+  border-bottom: 1px solid #f1f5f9;
 }
 
-.avatar-wrapper {
-  position: relative;
-  width: 42px;
-  height: 42px;
-}
-
-.user-avatar {
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 2px solid rgba(255, 255, 255, 0.2);
-}
-
-.status-dot {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 10px;
-  height: 10px;
-  background-color: var(--accent-green);
-  border: 2px solid var(--sidebar-bg);
-  border-radius: 50%;
-}
-
-.user-meta {
-  display: flex;
-  flex-direction: column;
-}
-
-.user-name {
+.metoxi-brand-icon {
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 0.6rem;
+  background-color: var(--metoxi-emerald);
   color: #ffffff;
-  font-weight: 700;
-  font-size: 0.95rem;
-  line-height: 1.2;
-}
-
-.user-subtext {
-  color: #7e8299;
-  font-size: 0.75rem;
   display: flex;
   align-items: center;
-  gap: 0.3rem;
+  justify-content: center;
+  font-size: 1.1rem;
+  font-weight: 800;
 }
 
-.sidebar-search-box {
-  position: relative;
-  margin-bottom: 1.8rem;
+.metoxi-sidebar-nav {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem 0.75rem;
 }
 
-.sidebar-search-input {
-  width: 100%;
-  background-color: #1b1b28;
-  border: 1px solid #2b2b40;
-  border-radius: 6px;
-  padding: 0.55rem 2rem 0.55rem 0.85rem;
-  color: #cdcdde;
-  font-size: 0.825rem;
-  outline: none;
-  box-sizing: border-box;
-}
-
-.sidebar-search-input::placeholder {
-  color: #565674;
-}
-
-.sidebar-search-icon {
-  position: absolute;
-  right: 0.75rem;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #565674;
-  font-size: 0.85rem;
-  pointer-events: none;
-}
-
-.menu-section-header {
-  color: #4c4e69;
-  font-size: 0.725rem;
-  font-weight: 700;
+.metoxi-nav-group-label {
+  font-size: 0.65rem;
+  font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 0.75rem;
-  padding: 0 0.5rem;
+  letter-spacing: 0.08em;
+  color: var(--metoxi-text-light);
+  padding: 0.85rem 0.75rem 0.35rem;
 }
 
-.sidebar-nav-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  list-style: none;
-  padding: 0;
-  margin: 0 0 2rem 0;
-}
-
-.nav-item-btn {
+.metoxi-nav-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  padding: 0.7rem 0.85rem;
-  border-radius: 8px;
+  padding: 0.65rem 0.75rem;
+  border-radius: 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--metoxi-text-muted);
   border: none;
   background: transparent;
-  color: var(--sidebar-text);
-  font-size: 0.875rem;
-  font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
   text-align: left;
 }
 
-.nav-item-btn:hover {
-  background-color: var(--sidebar-hover);
-  color: #ffffff;
+.metoxi-nav-item:hover {
+  background-color: #f1f5f9;
+  color: var(--metoxi-text-dark);
 }
 
-.nav-item-btn.active {
-  background: linear-gradient(135deg, #7239ea, #5014d0);
-  color: var(--sidebar-text-active);
-  box-shadow: 0 4px 12px rgba(114, 57, 234, 0.3);
-}
-
-.nav-item-left {
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-}
-
-.nav-icon {
-  width: 18px;
-  height: 18px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.new-badge {
-  background: linear-gradient(135deg, #ff2a6d, #f50057);
-  color: #ffffff;
-  font-size: 0.65rem;
+.metoxi-nav-item.active {
+  background-color: var(--metoxi-emerald-light);
+  color: var(--metoxi-emerald-dark);
   font-weight: 700;
-  padding: 0.15rem 0.5rem;
-  border-radius: 10px;
-  margin-left: 0.5rem;
-  text-transform: uppercase;
-  box-shadow: 0 2px 6px rgba(255, 42, 109, 0.4);
+  border: 1px solid #bbf7d0;
 }
 
-.category-tag-item {
+.metoxi-sidebar-footer {
+  padding: 1rem;
+  border-top: 1px solid #f1f5f9;
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.45rem 0.5rem;
-  color: var(--sidebar-text);
-  font-size: 0.825rem;
+  justify-content: space-around;
+  color: var(--metoxi-text-muted);
+}
+
+.metoxi-sidebar-footer button {
+  background: transparent;
+  border: none;
+  font-size: 1.1rem;
   cursor: pointer;
+  padding: 0.35rem;
+  border-radius: 0.5rem;
+  transition: background 0.15s ease;
 }
 
-.category-tag-item:hover {
-  color: #ffffff;
+.metoxi-sidebar-footer button:hover {
+  background-color: #f1f5f9;
 }
 
-.tag-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
-}
-
-.tag-dot.sales { background-color: var(--accent-pink); }
-.tag-dot.marketing { background-color: var(--accent-purple); }
-
-/* Main Content Wrapper */
-.admin-main-wrapper {
+/* Main Container */
+.metoxi-main-container {
   flex: 1;
   display: flex;
   flex-direction: column;
   min-width: 0;
+  height: 100vh;
+  overflow: hidden;
 }
 
-.admin-top-header {
-  background-color: var(--admin-bg);
-  padding: 1.5rem 2rem 1rem;
+/* Top Header Bar */
+.metoxi-header {
+  height: 64px;
+  background-color: #ffffff;
+  border-bottom: 1px solid var(--metoxi-border);
+  padding: 0 1.5rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  flex-wrap: wrap;
+  position: sticky;
+  top: 0;
+  z-index: 40;
+}
+
+.metoxi-header-left {
+  display: flex;
+  align-items: center;
   gap: 1rem;
+  flex: 1;
+  max-width: 500px;
 }
 
-.header-title-group h1 {
-  margin: 0;
-  font-size: 1.35rem;
-  font-weight: 800;
-  color: #181c32;
-}
-
-.header-title-group p {
-  margin: 0.2rem 0 0 0;
-  font-size: 0.825rem;
-  color: var(--text-muted);
-}
-
-.top-action-bar {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  flex-wrap: wrap;
-}
-
-/* Date Selector Dropdown */
-.date-selector-select {
-  background: #ffffff;
-  border: 1px solid #e1e3ea;
-  border-radius: 8px;
-  padding: 0.55rem 0.95rem;
-  font-size: 0.825rem;
-  font-weight: 600;
-  color: #464e5f;
+.metoxi-menu-toggle {
+  background: transparent;
+  border: none;
+  font-size: 1.2rem;
+  color: var(--metoxi-text-muted);
   cursor: pointer;
-  outline: none;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.02);
 }
 
-.btn-header-action {
-  background: #ffffff;
-  border: 1px solid #e1e3ea;
-  border-radius: 8px;
-  padding: 0.55rem 0.95rem;
-  font-size: 0.825rem;
-  font-weight: 600;
-  color: #464e5f;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.02);
-  transition: all 0.15s ease;
-}
-
-.btn-header-action:hover {
-  background: #ffffff;
-  border-color: var(--accent-purple);
-  color: var(--accent-purple);
-}
-
-/* Auto Refresh Toggle Switch */
-.auto-refresh-toggle-btn {
+.metoxi-search-bar {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background: #ffffff;
-  border: 1px solid #e1e3ea;
-  border-radius: 8px;
-  padding: 0.5rem 0.85rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: #464e5f;
-  cursor: pointer;
+  background-color: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 9999px;
+  padding: 0.45rem 1rem;
+  width: 100%;
 }
 
-.auto-refresh-toggle-btn.active {
-  border-color: var(--accent-green);
-  background: #f0fdf4;
-  color: #166534;
+.metoxi-search-bar input {
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 0.85rem;
+  width: 100%;
+  color: var(--metoxi-text-dark);
 }
 
-.live-pulse-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background-color: var(--accent-green);
-  box-shadow: 0 0 0 0 rgba(80, 205, 137, 0.7);
-  animation: pulse 1.5s infinite;
-}
-
-@keyframes pulse {
-  0% {
-    transform: scale(0.95);
-    box-shadow: 0 0 0 0 rgba(80, 205, 137, 0.7);
-  }
-  70% {
-    transform: scale(1);
-    box-shadow: 0 0 0 8px rgba(80, 205, 137, 0);
-  }
-  100% {
-    transform: scale(0.95);
-    box-shadow: 0 0 0 0 rgba(80, 205, 137, 0);
-  }
-}
-
-/* Stat Strip Container */
-.stat-strip-container {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
+.metoxi-header-right {
+  display: flex;
+  align-items: center;
   gap: 1.25rem;
-  padding: 0 2rem 1.5rem;
 }
 
-.stat-metric-card {
-  background: #ffffff;
-  border-radius: 12px;
-  padding: 1.25rem 1.4rem;
-  border: 1px solid var(--card-border);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
+.metoxi-icon-badge-btn {
+  position: relative;
+  background: transparent;
+  border: none;
+  font-size: 1.15rem;
+  color: var(--metoxi-text-muted);
+  cursor: pointer;
+  padding: 0.35rem;
 }
 
-.stat-label-title {
-  font-size: 0.775rem;
-  font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-}
-
-.stat-value-main {
-  font-size: 1.5rem;
+.metoxi-badge {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  background-color: var(--metoxi-emerald);
+  color: #fff;
+  font-size: 0.65rem;
   font-weight: 800;
-  color: var(--text-main);
-  line-height: 1.2;
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #fff;
 }
 
-.stat-note-sub {
-  font-size: 0.75rem;
-  color: var(--accent-green);
-  font-weight: 600;
-}
-
-/* Page Body Layout */
-.dashboard-content-body {
-  padding: 0 2rem 2.5rem;
+/* Dashboard Body Content */
+.metoxi-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.25rem;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.25rem;
 }
 
-.main-dashboard-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
-  gap: 1.5rem;
+/* Cards & Containers */
+.metoxi-card {
+  background-color: var(--metoxi-card-bg);
+  border-radius: 1rem;
+  border: 1px solid var(--metoxi-border);
+  padding: 1.25rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
-@media (max-width: 1100px) {
-  .stat-strip-container {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  .main-dashboard-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 768px) {
-  .admin-layout {
-    flex-direction: column;
-  }
-  .admin-sidebar {
-    width: 100%;
-  }
-  .stat-strip-container {
-    grid-template-columns: 1fr;
-    padding: 0 1rem 1rem;
-  }
-  .dashboard-content-body {
-    padding: 0 1rem 2rem;
-  }
-}
-
-/* Card Wrapper */
-.theme-card {
-  background: var(--card-bg);
-  border-radius: 12px;
-  padding: 1.4rem;
-  border: 1px solid var(--card-border);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
-  margin-bottom: 1.5rem;
-}
-
-.theme-card-header {
+.metoxi-card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 1.25rem;
-  flex-wrap: wrap;
-  gap: 0.75rem;
+  margin-bottom: 1rem;
 }
 
-.theme-card-title {
+.metoxi-card-title {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--metoxi-text-dark);
   margin: 0;
-  font-size: 1.05rem;
-  font-weight: 700;
-  color: var(--text-main);
 }
 
-/* Status Filter Pills Bar */
-.status-pills-bar {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  flex-wrap: wrap;
-}
-
-.status-pill-btn {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 20px;
-  padding: 0.35rem 0.75rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: #64748b;
+.metoxi-menu-dots {
+  background: transparent;
+  border: none;
+  color: var(--metoxi-text-light);
   cursor: pointer;
-  transition: all 0.15s ease;
+  font-size: 1rem;
 }
 
-.status-pill-btn:hover {
-  border-color: var(--accent-purple);
-  color: var(--accent-purple);
-}
-
-.status-pill-btn.active {
-  background: var(--accent-purple);
-  color: #ffffff;
-  border-color: var(--accent-purple);
-}
-
-/* Workflow grid */
-.workflow-grid {
+/* Quick Metric Stats Grid */
+.metoxi-quick-stats-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.85rem;
+  grid-template-columns: repeat(4, 1fr);
+  height: 100%;
+  align-items: center;
 }
 
-.workflow-item-box {
-  padding: 0.9rem;
-  border-radius: 8px;
-  background: #f8f9fa;
-  border: 1px solid #edf2f7;
+.metoxi-stat-col {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0.75rem;
+  border-right: 1px solid #f1f5f9;
 }
 
-.workflow-name {
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--text-muted);
-  text-transform: uppercase;
+.metoxi-stat-col:last-child {
+  border-right: none;
 }
 
-.workflow-count {
-  font-size: 1.35rem;
+.metoxi-stat-icon-circle {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  margin-bottom: 0.75rem;
+}
+
+.metoxi-stat-val {
+  font-size: 1.25rem;
   font-weight: 800;
-  color: var(--accent-purple);
+  color: var(--metoxi-text-dark);
 }
 
-/* Orders Table */
-.orders-data-table {
+.metoxi-stat-lbl {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--metoxi-text-muted);
+  margin-top: 0.2rem;
+}
+
+/* Operational Data Tables */
+.metoxi-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.85rem;
 }
 
-.orders-data-table th {
+.metoxi-table th {
   text-align: left;
-  color: var(--text-muted);
-  font-weight: 600;
-  padding: 0.65rem 0.75rem;
-  border-bottom: 1px solid #eef2f7;
-  background: #f8f9fa;
-}
-
-.orders-data-table td {
-  padding: 0.75rem;
-  border-bottom: 1px solid #edf2f7;
-  color: var(--text-main);
-}
-
-.status-tag {
-  display: inline-block;
-  padding: 0.2rem 0.65rem;
-  border-radius: 999px;
-  font-size: 0.725rem;
+  padding: 0.75rem 1rem;
+  color: var(--metoxi-text-muted);
   font-weight: 700;
+  font-size: 0.75rem;
   text-transform: uppercase;
-  background: #e1f0ff;
-  color: var(--accent-blue);
+  border-bottom: 1px solid #e2e8f0;
+  background-color: #f8fafc;
 }
 
-.status-tag.AWAITING_SUBSTITUTION {
-  background: #fff3dc;
-  color: var(--accent-yellow);
+.metoxi-table td {
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid #f1f5f9;
+  color: var(--metoxi-text-dark);
+  font-weight: 600;
 }
 
-.status-tag.DELIVERED {
-  background: #dcfce7;
-  color: #166534;
-}
-
-/* Fleet Capacity Grid */
-.fleet-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 1rem;
-}
-
-.partner-card {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 1rem;
-  display: flex;
+.metoxi-status-badge {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-}
-
-.partner-info {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.partner-name {
-  font-weight: 700;
-  font-size: 0.9rem;
-  color: #1e293b;
-}
-
-.partner-store {
-  font-size: 0.775rem;
-  color: #64748b;
-}
-
-.partner-badge {
+  gap: 0.3rem;
   padding: 0.25rem 0.6rem;
-  border-radius: 999px;
-  font-size: 0.725rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
   font-weight: 700;
 }
 
-.partner-badge.AVAILABLE {
-  background: #dcfce7;
-  color: #166534;
+.metoxi-status-badge.DELIVERED {
+  background-color: #dcfce7;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
 }
 
-.partner-badge.BUSY {
-  background: #fef3c7;
+.metoxi-status-badge.PICKING {
+  background-color: #dbeafe;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+
+.metoxi-status-badge.AWAITING_SUBSTITUTION {
+  background-color: #fef3c7;
   color: #b45309;
+  border: 1px solid #fde68a;
 }
 
-/* Floating Action Button */
-.floating-settings-fab {
-  position: fixed;
-  bottom: 25px;
-  right: 25px;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #ff2a6d, #e91e63);
-  color: #ffffff;
-  border: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 6px 16px rgba(255, 42, 109, 0.4);
-  cursor: pointer;
-  z-index: 999;
-  transition: transform 0.2s ease;
+.metoxi-status-badge.PENDING {
+  background-color: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
 }
 
-.floating-settings-fab:hover {
-  transform: scale(1.08);
+@media (max-width: 1024px) {
+  .metoxi-quick-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .metoxi-sidebar {
+    display: none;
+  }
 }

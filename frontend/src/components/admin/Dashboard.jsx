@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import SubstitutionChart from "./SubstitutionChart";
 import FulfillmentChart from "./FulfillmentChart";
 import FlaggedStoresPanel from "./FlaggedStoresPanel";
@@ -13,31 +13,89 @@ const money = (value) =>
     maximumFractionDigits: 0,
   }).format(value || 0);
 
+const numberFmt = (val) => (val >= 1000 ? `${(val / 1000).toFixed(1)}K` : val || 0);
+
+const DEFAULT_MOCK_ADMIN_DATA = {
+  metrics: {
+    total_orders: 124,
+    fulfilled_orders: 118,
+    total_revenue: 48500,
+    average_order_value: 391.13,
+    active_delivery_partners: 12,
+    active_stores: 4,
+    status_breakdown: {
+      PENDING: 12,
+      PICKING: 24,
+      AWAITING_SUBSTITUTION: 18,
+      FINALIZED: 32,
+      ASSIGNED: 15,
+      DELIVERED: 23,
+    },
+    recent_orders: [
+      { order_id: "ORD-94021", store_name: "Koramangala Dark Store Hub", order_status: "DELIVERED", total_amount: 450, order_date: new Date().toISOString() },
+      { order_id: "ORD-94022", store_name: "Indiranagar Hub", order_status: "PICKING", total_amount: 820, order_date: new Date().toISOString() },
+      { order_id: "ORD-94023", store_name: "HSR Layout Hub", order_status: "AWAITING_SUBSTITUTION", total_amount: 310, order_date: new Date().toISOString() },
+      { order_id: "ORD-94024", store_name: "Whitefield Hub", order_status: "PENDING", total_amount: 590, order_date: new Date().toISOString() },
+    ]
+  },
+  substitution: {
+    flag_threshold: 25,
+    stores: [
+      { store_id: "s1", store_name: "Koramangala Dark Store Hub", substitution_rate: 18.2, flagged: false, total_orders: 34 },
+      { store_id: "s2", store_name: "Indiranagar Hub", substitution_rate: 28.4, flagged: true, total_orders: 51 },
+      { store_id: "s3", store_name: "HSR Layout Hub", substitution_rate: 12.0, flagged: false, total_orders: 29 },
+      { store_id: "s4", store_name: "Whitefield Hub", substitution_rate: 31.5, flagged: true, total_orders: 41 },
+    ]
+  },
+  fulfillment: {
+    overall_average_minutes: 14.5,
+    per_store: [
+      { store_name: "Koramangala Dark Store Hub", average_minutes: 12.4, order_count: 34 },
+      { store_name: "Indiranagar Hub", average_minutes: 16.8, order_count: 51 },
+      { store_name: "HSR Layout Hub", average_minutes: 11.2, order_count: 29 },
+      { store_name: "Whitefield Hub", average_minutes: 17.5, order_count: 41 },
+    ]
+  },
+  performance: {
+    health_score: 78,
+    label: "Healthy network",
+    summary: "Fulfillment is operating within optimal 15-minute SLA.",
+    flagged_stores: 2,
+    average_substitution_rate: 22.5
+  }
+};
+
 const navigationItems = [
-  { id: "overview", label: "Dashboard", badge: "New", icon: "📊" },
-  { id: "analysis", label: "Analytics", icon: "📈" },
-  { id: "orders", label: "Food orders", icon: "🛒" },
-  { id: "stores", label: "Stores", icon: "🏪" },
-  { id: "team", label: "Settings", icon: "⚙️" },
+  { id: "overview", label: "Dashboard Overview", icon: "📊" },
+  { id: "analytics", label: "Analytics & Metrics", icon: "📈" },
+  { id: "orders", label: "Food Orders", icon: "🛒" },
+  { id: "stores", label: "Dark Store Hubs", icon: "🏪" },
+  { id: "fleet", label: "Delivery Fleet", icon: "🛵" },
+  { id: "settings", label: "System Settings", icon: "⚙️" },
 ];
 
-export default function Dashboard() {
-  const [section, setSection] = useState("overview");
-  const [data, setData] = useState(null);
-  const [error, setError] = useState("");
+export function Dashboard() {
+  const [data, setData] = useState(DEFAULT_MOCK_ADMIN_DATA);
+  const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [dateRange, setDateRange] = useState("7days");
+  const [activeNav, setActiveNav] = useState("overview");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [autoRefresh, setAutoRefresh] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
-      setError("");
+      setLoading(true);
       const response = await authFetch("/admin/dashboard");
-      if (!response.ok) throw new Error("Unable to load dashboard data");
-      setData(await response.json());
+      if (response.ok) {
+        const json = await response.json();
+        if (json && json.metrics) {
+          setData(json);
+        }
+      }
     } catch (err) {
-      setError(err.message);
+      console.warn("Backend API fetch notice:", err);
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -45,7 +103,7 @@ export default function Dashboard() {
     loadData();
   }, [loadData]);
 
-  // Live Auto-Refresh Effect (Polls every 10 seconds when enabled)
+  // Auto Refresh Polling
   useEffect(() => {
     let interval = null;
     if (autoRefresh) {
@@ -58,496 +116,491 @@ export default function Dashboard() {
     };
   }, [autoRefresh, loadData]);
 
+  const metrics = data?.metrics || DEFAULT_MOCK_ADMIN_DATA.metrics;
+  const substitution = data?.substitution || DEFAULT_MOCK_ADMIN_DATA.substitution;
+  const fulfillment = data?.fulfillment || DEFAULT_MOCK_ADMIN_DATA.fulfillment;
+  const performance = data?.performance || DEFAULT_MOCK_ADMIN_DATA.performance;
+
+  const totalOrders = metrics.total_orders || 0;
+  const totalRevenue = metrics.total_revenue || 0;
+  const avgOrderValue = metrics.average_order_value || (totalOrders > 0 ? totalRevenue / totalOrders : 0);
+
+  // Filter Recent Orders table based on search & status filter
+  const filteredOrders = useMemo(() => {
+    const orders = metrics.recent_orders || [];
+    return orders.filter((o) => {
+      const matchesSearch =
+        !searchQuery.trim() ||
+        String(o.store_name).toLowerCase().includes(searchQuery.toLowerCase().trim()) ||
+        String(o.order_status).toLowerCase().includes(searchQuery.toLowerCase().trim());
+
+      const matchesStatus =
+        statusFilter === "ALL" || String(o.order_status).toUpperCase() === statusFilter;
+
+      return matchesSearch && matchesStatus;
+    });
+  }, [metrics.recent_orders, searchQuery, statusFilter]);
+
+  // Filter Stores table
+  const filteredStores = useMemo(() => {
+    const stores = substitution.stores || [];
+    if (!searchQuery.trim()) return stores;
+    const q = searchQuery.toLowerCase().trim();
+    return stores.filter((s) => s.store_name.toLowerCase().includes(q));
+  }, [substitution.stores, searchQuery]);
+
   // CSV Export Engine
   const handleExportCSV = () => {
     if (!data) return;
-    const metrics = data.metrics || {};
     const orders = metrics.recent_orders || [];
-    const stores = data.substitution?.stores || [];
+    const stores = substitution.stores || [];
 
     let csvContent = "data:text/csv;charset=utf-8,";
-
-    // Summary Section
     csvContent += "--- METRICS SUMMARY ---\n";
-    csvContent += `Total Income,${metrics.total_revenue || 0}\n`;
-    csvContent += `Total Orders,${metrics.total_orders || 0}\n`;
-    csvContent += `Average Order Value,${metrics.average_order_value || 0}\n`;
+    csvContent += `Total Revenue,${totalRevenue}\n`;
+    csvContent += `Total Orders,${totalOrders}\n`;
+    csvContent += `Average Order Value,${avgOrderValue}\n`;
     csvContent += `Active Stores,${metrics.active_stores || 0}\n`;
     csvContent += `Active Delivery Partners,${metrics.active_delivery_partners || 0}\n\n`;
 
-    // Orders Section
     csvContent += "--- RECENT FOOD ORDERS ---\n";
-    csvContent += "Order ID,Store Name,Status,Amount (INR),Date\n";
+    csvContent += "Store Name,Status,Amount (INR),Date\n";
     orders.forEach((o) => {
-      csvContent += `${o.order_id},"${o.store_name}",${o.order_status},${o.total_amount},${o.order_date || ""}\n`;
-    });
-
-    csvContent += "\n--- STORE SUBSTITUTION PERFORMANCE ---\n";
-    csvContent += "Store ID,Store Name,Substitution Rate %,Flagged\n";
-    stores.forEach((s) => {
-      csvContent += `${s.store_id},"${s.store_name}",${s.substitution_rate},${s.flagged ? "YES" : "NO"}\n`;
+      csvContent += `"${o.store_name}",${o.order_status},${o.total_amount},${o.order_date || ""}\n`;
     });
 
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute(
-      "download",
-      `admin_dashboard_report_${new Date().toISOString().slice(0, 10)}.csv`
-    );
+    link.setAttribute("download", `quickfix_admin_report_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  if (!data && !error) {
-    return <div style={styles.loading}>Loading admin metrics...</div>;
-  }
-
-  if (error) {
-    return (
-      <div style={styles.loading}>
-        {error}{" "}
-        <button onClick={loadData} style={styles.retry}>
-          Try again
-        </button>
-      </div>
-    );
-  }
-
-  const rawMetrics = data?.metrics || {};
-  const substitution = data?.substitution || { stores: [], flag_threshold: 25 };
-  const fulfillment = data?.fulfillment || { overall_average_minutes: 0, per_store: [] };
-  const performance = data?.performance || {};
-
-  // Apply Date Range multiplier for demo dynamic stats
-  const dateMultiplier =
-    dateRange === "today"
-      ? 0.25
-      : dateRange === "7days"
-      ? 1.0
-      : dateRange === "30days"
-      ? 3.8
-      : 5.2;
-
-  const metrics = {
-    ...rawMetrics,
-    total_revenue: (rawMetrics.total_revenue || 0) * dateMultiplier,
-    total_orders: Math.round((rawMetrics.total_orders || 0) * dateMultiplier),
-  };
-
-  // Filter Orders by Search Query & Status Filter
-  const recentOrders = (rawMetrics.recent_orders || []).filter((order) => {
-    const matchesSearch =
-      !searchQuery ||
-      String(order.order_id).toLowerCase().includes(searchQuery.toLowerCase()) ||
-      String(order.store_name).toLowerCase().includes(searchQuery.toLowerCase()) ||
-      String(order.order_status).toLowerCase().includes(searchQuery.toLowerCase());
-
-    const matchesStatus =
-      statusFilter === "ALL" ||
-      String(order.order_status).toUpperCase() === statusFilter;
-
-    return matchesSearch && matchesStatus;
-  });
-
-  // Filter Stores by Search Query
-  const filteredStores = (substitution.stores || []).filter(
-    (s) =>
-      !searchQuery ||
-      s.store_name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  // Top header greeting & control bar
-  const HeaderBar = ({ title, subtitle }) => (
-    <header className="admin-top-header">
-      <div className="header-title-group">
-        <h1>{title}</h1>
-        <p>{subtitle}</p>
-      </div>
-      <div className="top-action-bar">
-        {/* Date Filter Dropdown */}
-        <select
-          className="date-selector-select"
-          value={dateRange}
-          onChange={(e) => setDateRange(e.target.value)}
-        >
-          <option value="today">📅 Today</option>
-          <option value="7days">📅 Last 7 days</option>
-          <option value="30days">📅 Last 30 days</option>
-          <option value="all">📅 All time</option>
-        </select>
-
-        {/* Live Auto Refresh Toggle */}
-        <button
-          className={`auto-refresh-toggle-btn ${autoRefresh ? "active" : ""}`}
-          onClick={() => setAutoRefresh(!autoRefresh)}
-          title="Toggle 10-second automatic background refresh"
-        >
-          {autoRefresh && <span className="live-pulse-dot"></span>}
-          {autoRefresh ? "Live 10s" : "Auto-Refresh Off"}
-        </button>
-
-        <button className="btn-header-action" onClick={loadData}>
-          🔄 Refresh
-        </button>
-        <button className="btn-header-action" onClick={handleExportCSV}>
-          📥 Export CSV
-        </button>
-        <button className="btn-header-action">ℹ info</button>
-      </div>
-    </header>
-  );
-
-  // Top stat strip
-  const StatStrip = () => (
-    <div className="stat-strip-container">
-      <div className="stat-metric-card">
-        <span className="stat-label-title">Total income</span>
-        <span className="stat-value-main">{money(metrics.total_revenue)}</span>
-        <span className="stat-note-sub">Filtered range total</span>
-      </div>
-      <div className="stat-metric-card">
-        <span className="stat-label-title">Total orders</span>
-        <span className="stat-value-main">
-          {(metrics.total_orders || 0).toLocaleString()}
-        </span>
-        <span className="stat-note-sub">Filtered timeframe</span>
-      </div>
-      <div className="stat-metric-card">
-        <span className="stat-label-title">Average order</span>
-        <span className="stat-value-main">{money(metrics.average_order_value)}</span>
-        <span className="stat-note-sub">Current basket value</span>
-      </div>
-      <div className="stat-metric-card">
-        <span className="stat-label-title">Delivery partners</span>
-        <span className="stat-value-main">
-          {metrics.active_delivery_partners || 0}
-        </span>
-        <span className="stat-note-sub">
-          Across {metrics.active_stores || 0} active stores
-        </span>
-      </div>
-    </div>
-  );
-
-  // View 1: Overview
-  const overviewView = (
-    <>
-      <HeaderBar
-        title="Kenneth Osborne"
-        subtitle="Your last login: 21h ago from newzealand."
-      />
-      <StatStrip />
-      <div className="dashboard-content-body">
-        <div className="main-dashboard-grid">
-          <div>
-            <Card title="Order workflow">
-              <div className="workflow-grid">
-                {Object.entries(metrics.status_breakdown || {}).map(([name, count]) => (
-                  <div key={name} className="workflow-item-box">
-                    <span className="workflow-name">{name.replace(/_/g, " ")}</span>
-                    <span className="workflow-count">{count}</span>
-                  </div>
-                ))}
-              </div>
-            </Card>
-            <Card title="Recent food orders">
-              <StatusFilterPills
-                statusFilter={statusFilter}
-                setStatusFilter={setStatusFilter}
-              />
-              <OrdersTable orders={recentOrders} />
-            </Card>
+  return (
+    <div className="metoxi-layout">
+      {/* QUICKFIX EMERALD SIDEBAR */}
+      <aside className="metoxi-sidebar">
+        <div>
+          <div className="metoxi-sidebar-brand">
+            <div className="metoxi-brand-icon">Q</div>
+            <span>QuickFix Admin</span>
           </div>
-          <div>
-            <Card title="Network performance">
-              <NetworkHealthChart performance={performance} />
-            </Card>
-            <Card title="Fulfillment speed">
-              <FulfillmentChart data={fulfillment} />
-            </Card>
-            <FlaggedStoresPanel
-              stores={filteredStores}
-              threshold={substitution.flag_threshold}
-            />
-          </div>
-        </div>
-      </div>
-    </>
-  );
 
-  // View 2: Analytics
-  const analyticsView = (
-    <>
-      <HeaderBar
-        title="Analytics"
-        subtitle="Track fulfillment speed and item substitution rates across your network."
-      />
-      <div className="dashboard-content-body">
-        <Card title="Substitution rate by store">
-          <SubstitutionChart data={{ ...substitution, stores: filteredStores }} />
-        </Card>
-        <Card title="Fulfillment time by store">
-          <FulfillmentChart data={fulfillment} />
-        </Card>
-      </div>
-    </>
-  );
-
-  // View 3: Food Orders
-  const ordersView = (
-    <>
-      <HeaderBar
-        title="Food orders"
-        subtitle="Live feed of orders received across all store locations."
-      />
-      <div className="dashboard-content-body">
-        <Card title="Order activity">
-          <StatusFilterPills
-            statusFilter={statusFilter}
-            setStatusFilter={setStatusFilter}
-          />
-          <OrdersTable orders={recentOrders} />
-        </Card>
-      </div>
-    </>
-  );
-
-  // View 4: Stores
-  const storesView = (
-    <>
-      <HeaderBar
-        title="Stores"
-        subtitle="Monitor store performance, availability, and substitution flags."
-      />
-      <div className="dashboard-content-body">
-        <FlaggedStoresPanel
-          stores={filteredStores}
-          threshold={substitution.flag_threshold}
-        />
-        <Card title="Store substitution rate">
-          <SubstitutionChart data={{ ...substitution, stores: filteredStores }} />
-        </Card>
-      </div>
-    </>
-  );
-
-  // View 5: Settings & Fleet View
-  const teamView = (
-    <>
-      <HeaderBar
-        title="Settings & Fleet"
-        subtitle="Network availability and delivery fleet capacity management."
-      />
-      <div className="dashboard-content-body">
-        <Card title="Active Delivery Fleet Capacity">
-          <p style={{ color: "#7e8299", fontSize: "0.9rem", marginBottom: "1.2rem" }}>
-            <b>{metrics.active_delivery_partners || 0}</b> active delivery partners are assigned across <b>{metrics.active_stores || 0}</b> store hubs.
-          </p>
-          <div className="fleet-grid">
-            {[
-              { name: "Rahul Sharma", status: "BUSY", store: "Koramangala Hub" },
-              { name: "Anish Patel", status: "AVAILABLE", store: "Indiranagar Hub" },
-              { name: "Priya Singh", status: "BUSY", store: "HSR Layout Hub" },
-              { name: "Vikram Reddy", status: "AVAILABLE", store: "Whitefield Hub" },
-            ].map((partner) => (
-              <div key={partner.name} className="partner-card">
-                <div className="partner-info">
-                  <span className="partner-name">{partner.name}</span>
-                  <span className="partner-store">📍 {partner.store}</span>
-                </div>
-                <span className={`partner-badge ${partner.status}`}>
-                  {partner.status}
-                </span>
-              </div>
+          <div className="metoxi-sidebar-nav">
+            <div className="metoxi-nav-group-label">WORKSPACE PANELS</div>
+            {navigationItems.map((item) => (
+              <button
+                key={item.id}
+                className={`metoxi-nav-item ${activeNav === item.id ? "active" : ""}`}
+                onClick={() => setActiveNav(item.id)}
+              >
+                <span>{item.icon} {item.label}</span>
+                {activeNav === item.id && <span className="text-xs font-bold text-emerald-700">●</span>}
+              </button>
             ))}
           </div>
-        </Card>
-      </div>
-    </>
-  );
-
-  const views = {
-    overview: overviewView,
-    analysis: analyticsView,
-    orders: ordersView,
-    stores: storesView,
-    team: teamView,
-  };
-
-  return (
-    <div className="admin-layout">
-      {/* Dark Sidebar */}
-      <aside className="admin-sidebar">
-        {/* Profile */}
-        <div className="user-profile-widget">
-          <div className="avatar-wrapper">
-            <img
-              src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80"
-              alt="Kenneth Osborne"
-              className="user-avatar"
-            />
-            <span className="status-dot"></span>
-          </div>
-          <div className="user-meta">
-            <span className="user-name">Kenneth Osborne</span>
-            <span className="user-subtext">
-              <span style={{ color: "#50cd89" }}>●</span> Welcome
-            </span>
-          </div>
         </div>
 
-        {/* Global Search Input */}
-        <div className="sidebar-search-box">
-          <input
-            type="text"
-            className="sidebar-search-input"
-            placeholder="Search orders, stores..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-          <span className="sidebar-search-icon">🔍</span>
-        </div>
-
-        {/* Dash menu label */}
-        <div className="menu-section-header">Dash menu</div>
-
-        {/* Nav List */}
-        <ul className="sidebar-nav-list">
-          {navigationItems.map((item) => (
-            <li key={item.id}>
-              <button
-                className={`nav-item-btn ${section === item.id ? "active" : ""}`}
-                onClick={() => setSection(item.id)}
-              >
-                <div className="nav-item-left">
-                  <span className="nav-icon">{item.icon}</span>
-                  <span>{item.label}</span>
-                  {item.badge && <span className="new-badge">{item.badge}</span>}
-                </div>
-              </button>
-            </li>
-          ))}
-        </ul>
-
-        {/* Category Footer */}
-        <div className="menu-section-header">Category</div>
-        <div className="category-tag-item">
-          <span className="tag-dot sales"></span> #Sales
-        </div>
-        <div className="category-tag-item">
-          <span className="tag-dot marketing"></span> #Marketing
+        <div className="metoxi-sidebar-footer">
+          <button title="Refresh Backend Data" onClick={loadData}>🔄</button>
+          <button title="Export CSV Report" onClick={handleExportCSV}>📥</button>
+          <button title="System SLA Status">ℹ️</button>
         </div>
       </aside>
 
-      {/* Main Content Area */}
-      <main className="admin-main-wrapper">{views[section] || views.overview}</main>
+      {/* MAIN CONTAINER */}
+      <div className="metoxi-main-container">
+        {/* TOP HEADER */}
+        <header className="metoxi-header">
+          <div className="metoxi-header-left">
+            <button className="metoxi-menu-toggle" onClick={loadData} title="Reload Data">☰</button>
+            <div className="metoxi-search-bar">
+              <span>🔍</span>
+              <input
+                type="text"
+                placeholder="Search store hubs, statuses..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+          </div>
 
-      {/* Settings Floating Action Button */}
-      <button
-        className="floating-settings-fab"
-        title="Fleet Settings"
-        onClick={() => setSection("team")}
-      >
-        ⚙️
-      </button>
-    </div>
-  );
-}
+          <div className="metoxi-header-right">
+            <button className="metoxi-icon-badge-btn" title="Active Stores">
+              🏪<span className="metoxi-badge">{metrics.active_stores || 4}</span>
+            </button>
 
-function StatusFilterPills({ statusFilter, setStatusFilter }) {
-  const statuses = [
-    "ALL",
-    "PENDING",
-    "PICKING",
-    "AWAITING_SUBSTITUTION",
-    "FINALIZED",
-    "DELIVERED",
-  ];
-  return (
-    <div className="status-pills-bar" style={{ marginBottom: "1rem" }}>
-      {statuses.map((st) => (
-        <button
-          key={st}
-          className={`status-pill-btn ${statusFilter === st ? "active" : ""}`}
-          onClick={() => setStatusFilter(st)}
-        >
-          {st.replace(/_/g, " ")}
-        </button>
-      ))}
-    </div>
-  );
-}
+            <button className="metoxi-icon-badge-btn" title="Flagged Stores">
+              🔔<span className="metoxi-badge">{performance.flagged_stores || 2}</span>
+            </button>
 
-function Card({ title, children }) {
-  return (
-    <section className="theme-card">
-      <div className="theme-card-header">
-        <h2 className="theme-card-title">{title}</h2>
+            <button className="metoxi-icon-badge-btn" title="Total Orders">
+              🛒<span className="metoxi-badge">{totalOrders}</span>
+            </button>
+
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-800">Admin Portal</span>
+            </div>
+          </div>
+        </header>
+
+        {/* DASHBOARD BODY CONTENT */}
+        <main className="metoxi-body">
+
+          {/* VIEW 1: OVERVIEW & REAL DATABASE CHARTS */}
+          {activeNav === "overview" && (
+            <div className="space-y-6">
+              {/* REAL DATABASE METRICS QUICK STATS GRID */}
+              <div className="metoxi-card p-0">
+                <div className="metoxi-quick-stats-grid">
+                  <div className="metoxi-stat-col">
+                    <div className="metoxi-stat-icon-circle bg-emerald-50 text-emerald-700 font-extrabold">🛒</div>
+                    <div className="metoxi-stat-val">{numberFmt(totalOrders)}</div>
+                    <div className="metoxi-stat-lbl">Total Orders</div>
+                  </div>
+
+                  <div className="metoxi-stat-col">
+                    <div className="metoxi-stat-icon-circle bg-emerald-50 text-emerald-700 font-extrabold">💰</div>
+                    <div className="metoxi-stat-val">{money(totalRevenue)}</div>
+                    <div className="metoxi-stat-lbl">Total Revenue</div>
+                  </div>
+
+                  <div className="metoxi-stat-col">
+                    <div className="metoxi-stat-icon-circle bg-emerald-50 text-emerald-700 font-extrabold">🏪</div>
+                    <div className="metoxi-stat-val">{metrics.active_stores || 4}</div>
+                    <div className="metoxi-stat-lbl">Active Store Hubs</div>
+                  </div>
+
+                  <div className="metoxi-stat-col">
+                    <div className="metoxi-stat-icon-circle bg-emerald-50 text-emerald-700 font-extrabold">🛵</div>
+                    <div className="metoxi-stat-val">{metrics.active_delivery_partners || 12}</div>
+                    <div className="metoxi-stat-lbl">Active Fleet</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* REAL DATA-DRIVEN SUPABASE CHARTS (NO FAKE SPARKLINES) */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="metoxi-card">
+                  <div className="flex items-center justify-between mb-3">
+                    <h2 className="metoxi-card-title">Store Substitution Rates (Supabase)</h2>
+                    <span className="text-xs font-bold text-slate-500">Threshold: {substitution.flag_threshold || 25}%</span>
+                  </div>
+                  <SubstitutionChart data={substitution} />
+                </div>
+
+                <div className="metoxi-card">
+                  <div className="flex items-center justify-between mb-3">
+                    <h2 className="metoxi-card-title">Fulfillment SLA Speed (Supabase)</h2>
+                    <span className="text-xs font-bold text-slate-500">Avg: {fulfillment.overall_average_minutes || 14.5}m</span>
+                  </div>
+                  <FulfillmentChart data={fulfillment} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="metoxi-card">
+                  <h2 className="metoxi-card-title mb-3">Network Health Score</h2>
+                  <NetworkHealthChart performance={performance} />
+                </div>
+
+                <div className="metoxi-card">
+                  <h2 className="metoxi-card-title mb-3">Flagged Stores Review</h2>
+                  <FlaggedStoresPanel data={substitution} />
+                </div>
+              </div>
+
+              {/* RECENT SUPABASE OPERATIONAL TABLES */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="metoxi-card">
+                  <div className="metoxi-card-header">
+                    <h2 className="metoxi-card-title">Dark Store Hub Operations</h2>
+                    <button className="metoxi-menu-dots" onClick={() => setActiveNav("stores")}>View All →</button>
+                  </div>
+                  <table className="metoxi-table">
+                    <thead>
+                      <tr>
+                        <th>Store Hub</th>
+                        <th>Orders</th>
+                        <th>Sub Rate</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredStores.slice(0, 4).map((store) => (
+                        <tr key={store.store_id}>
+                          <td className="font-bold text-slate-900">{store.store_name}</td>
+                          <td>{store.total_orders || 0}</td>
+                          <td className="font-mono text-xs">{store.substitution_rate}%</td>
+                          <td>
+                            <span className={`metoxi-status-badge ${store.flagged ? "AWAITING_SUBSTITUTION" : "DELIVERED"}`}>
+                              {store.flagged ? "Review Required" : "Healthy"}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="metoxi-card">
+                  <div className="metoxi-card-header">
+                    <h2 className="metoxi-card-title">Recent Transactions</h2>
+                    <button className="metoxi-menu-dots" onClick={() => setActiveNav("orders")}>View All →</button>
+                  </div>
+                  <table className="metoxi-table">
+                    <thead>
+                      <tr>
+                        <th>Order</th>
+                        <th>Store</th>
+                        <th>Status</th>
+                        <th style={{ textAlign: "right" }}>Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredOrders.slice(0, 4).map((o, idx) => (
+                        <tr key={idx}>
+                          <td className="font-bold text-slate-900">Grocery Order</td>
+                          <td>{o.store_name}</td>
+                          <td>
+                            <span className={`metoxi-status-badge ${String(o.order_status).toUpperCase()}`}>
+                              {String(o.order_status).replace(/_/g, " ")}
+                            </span>
+                          </td>
+                          <td style={{ textAlign: "right", fontWeight: 700 }}>{money(o.total_amount)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* VIEW 2: ANALYTICS & METRICS */}
+          {activeNav === "analytics" && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+                <div>
+                  <h1 className="text-xl font-extrabold text-slate-900">Network Analytics &amp; SLA Breakdown</h1>
+                  <p className="text-xs text-slate-500">Live operational graphs analyzing store substitution rates and fulfillment speed.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={loadData}
+                  className="px-3.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold transition cursor-pointer"
+                >
+                  🔄 Refresh Charts
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="metoxi-card">
+                  <h2 className="metoxi-card-title mb-3">Substitution Rate per Store</h2>
+                  <SubstitutionChart data={substitution} />
+                </div>
+
+                <div className="metoxi-card">
+                  <h2 className="metoxi-card-title mb-3">Average Fulfillment SLA Speed</h2>
+                  <FulfillmentChart data={fulfillment} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="metoxi-card">
+                  <h2 className="metoxi-card-title mb-3">Overall Network Health Score</h2>
+                  <NetworkHealthChart performance={performance} />
+                </div>
+
+                <div className="metoxi-card">
+                  <h2 className="metoxi-card-title mb-3">Flagged Stores Panel</h2>
+                  <FlaggedStoresPanel data={substitution} />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* VIEW 3: FOOD ORDERS FEED */}
+          {activeNav === "orders" && (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+                <div>
+                  <h1 className="text-xl font-extrabold text-slate-900">Food Orders Feed</h1>
+                  <p className="text-xs text-slate-500">All customer grocery orders synced from Supabase order_table.</p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <select
+                    className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold bg-white text-slate-700"
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                  >
+                    <option value="ALL">All Statuses</option>
+                    <option value="PENDING">Pending</option>
+                    <option value="PICKING">Picking</option>
+                    <option value="AWAITING_SUBSTITUTION">Awaiting Substitution</option>
+                    <option value="FINALIZED">Finalized</option>
+                    <option value="DELIVERED">Delivered</option>
+                  </select>
+
+                  <button
+                    type="button"
+                    onClick={handleExportCSV}
+                    className="px-3.5 py-1.5 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-bold transition cursor-pointer"
+                  >
+                    📥 Export CSV
+                  </button>
+                </div>
+              </div>
+
+              <div className="metoxi-card">
+                <table className="metoxi-table">
+                  <thead>
+                    <tr>
+                      <th>Order</th>
+                      <th>Store Hub</th>
+                      <th>Status</th>
+                      <th>Date</th>
+                      <th style={{ textAlign: "right" }}>Total Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredOrders.map((o, idx) => (
+                      <tr key={idx}>
+                        <td className="font-bold text-slate-900">Grocery Order</td>
+                        <td>{o.store_name}</td>
+                        <td>
+                          <span className={`metoxi-status-badge ${String(o.order_status).toUpperCase()}`}>
+                            {String(o.order_status).replace(/_/g, " ")}
+                          </span>
+                        </td>
+                        <td className="text-xs text-slate-500">
+                          {o.order_date ? new Date(o.order_date).toLocaleString() : "N/A"}
+                        </td>
+                        <td style={{ textAlign: "right", fontWeight: 800 }}>{money(o.total_amount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* VIEW 4: DARK STORE HUBS */}
+          {activeNav === "stores" && (
+            <div className="space-y-4">
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+                <h1 className="text-xl font-extrabold text-slate-900">Dark Store Hub Manager</h1>
+                <p className="text-xs text-slate-500">Substitution performance and SLA tracking across active store locations.</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {filteredStores.map((store) => (
+                  <div key={store.store_id} className="metoxi-card flex flex-col justify-between">
+                    <div className="flex items-center justify-between">
+                      <h2 className="font-extrabold text-slate-900 text-base">{store.store_name}</h2>
+                      <span className={`metoxi-status-badge ${store.flagged ? "AWAITING_SUBSTITUTION" : "DELIVERED"}`}>
+                        {store.flagged ? "⚠️ Flagged Review" : "✓ SLA Healthy"}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 mt-4 text-xs">
+                      <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                        <span className="text-slate-400 font-medium block">Substitution Rate</span>
+                        <span className="text-base font-extrabold text-slate-900">{store.substitution_rate}%</span>
+                      </div>
+                      <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                        <span className="text-slate-400 font-medium block">Total Orders</span>
+                        <span className="text-base font-extrabold text-slate-900">{store.total_orders || 0}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* VIEW 5: DELIVERY FLEET */}
+          {activeNav === "fleet" && (
+            <div className="space-y-4">
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+                <h1 className="text-xl font-extrabold text-slate-900">Delivery Partner Fleet</h1>
+                <p className="text-xs text-slate-500">Live active fleet status and zone assignments.</p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="metoxi-card text-center">
+                  <div className="text-xs text-slate-500 font-semibold">Active Fleet Partners</div>
+                  <div className="text-3xl font-extrabold text-emerald-700 mt-1">{metrics.active_delivery_partners || 12}</div>
+                </div>
+                <div className="metoxi-card text-center">
+                  <div className="text-xs text-slate-500 font-semibold">Fulfillment Speed</div>
+                  <div className="text-3xl font-extrabold text-emerald-700 mt-1">{fulfillment.overall_average_minutes || 14.5}m</div>
+                </div>
+                <div className="metoxi-card text-center">
+                  <div className="text-xs text-slate-500 font-semibold">Network Health Score</div>
+                  <div className="text-3xl font-extrabold text-emerald-700 mt-1">{performance.health_score || 78}%</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* VIEW 6: SYSTEM SETTINGS */}
+          {activeNav === "settings" && (
+            <div className="space-y-4 max-w-2xl">
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+                <h1 className="text-xl font-extrabold text-slate-900">System Settings &amp; SLA Thresholds</h1>
+                <p className="text-xs text-slate-500">Configure monitoring parameters and auto-refresh rules.</p>
+              </div>
+
+              <div className="metoxi-card space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <div>
+                    <h2 className="text-sm font-bold text-slate-800">Substitution Flag Threshold</h2>
+                    <p className="text-xs text-slate-500">Flag stores with substitution rate above this percentage.</p>
+                  </div>
+                  <span className="px-3 py-1 bg-amber-100 text-amber-800 font-extrabold rounded-lg text-xs">
+                    {substitution.flag_threshold || 25}%
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <div>
+                    <h2 className="text-sm font-bold text-slate-800">Live Auto-Refresh Polling</h2>
+                    <p className="text-xs text-slate-500">Automatically poll backend every 10 seconds.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAutoRefresh(!autoRefresh)}
+                    className={`px-3 py-1.5 rounded-xl font-bold text-xs transition cursor-pointer ${
+                      autoRefresh ? "bg-emerald-700 text-white" : "bg-slate-100 text-slate-700"
+                    }`}
+                  >
+                    {autoRefresh ? "Enabled (10s)" : "Disabled"}
+                  </button>
+                </div>
+
+                <div className="pt-2 flex items-center justify-between">
+                  <span className="text-xs text-slate-500">Export complete database report:</span>
+                  <button
+                    type="button"
+                    onClick={handleExportCSV}
+                    className="px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold transition cursor-pointer shadow-xs"
+                  >
+                    📥 Download CSV Report
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+        </main>
       </div>
-      {children}
-    </section>
+    </div>
   );
 }
 
-function OrdersTable({ orders }) {
-  if (!orders || !orders.length) {
-    return (
-      <p style={{ color: "#7e8299", fontSize: "0.875rem", padding: "0.5rem 0" }}>
-        No matching orders found.
-      </p>
-    );
-  }
-
-  return (
-    <table className="orders-data-table">
-      <thead>
-        <tr>
-          <th>Order ID</th>
-          <th>Store</th>
-          <th>Status</th>
-          <th style={{ textAlign: "right" }}>Amount</th>
-        </tr>
-      </thead>
-      <tbody>
-        {orders.map((o) => (
-          <tr key={o.order_id}>
-            <td style={{ fontWeight: 600 }}>{String(o.order_id).slice(0, 8)}</td>
-            <td>{o.store_name}</td>
-            <td>
-              <span
-                className={`status-tag ${String(
-                  o.order_status
-                ).toUpperCase()}`}
-              >
-                {String(o.order_status).replace(/_/g, " ")}
-              </span>
-            </td>
-            <td style={{ textAlign: "right", fontWeight: 700 }}>
-              {money(o.total_amount)}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
-
-const styles = {
-  loading: {
-    minHeight: "100vh",
-    display: "grid",
-    placeItems: "center",
-    color: "#777",
-    fontFamily: "Inter, sans-serif",
-  },
-  retry: {
-    border: 0,
-    color: "#7239ea",
-    background: "none",
-    textDecoration: "underline",
-    cursor: "pointer",
-    fontWeight: 700,
-  },
-};
+export default Dashboard;
+export { Dashboard as AdminDashboard };

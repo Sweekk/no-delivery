@@ -1,6 +1,11 @@
 const supabase = require('../lib/supabaseClient');
-// A consolidated contract for the admin workspace. Individual metrics routes
-// remain available for pages that need only one data set.
+
+const SUBSTITUTION_RATE_FLAG_THRESHOLD = 25; // 25% threshold for flagging high substitution rate stores
+
+/**
+ * GET /api/admin/dashboard
+ * Consolidated dashboard metrics endpoint
+ */
 exports.getDashboard = async (req, res) => {
   const invoke = (handler) => new Promise((resolve, reject) => {
     const response = {
@@ -20,39 +25,44 @@ exports.getDashboard = async (req, res) => {
       invoke(exports.getSubstitutionRateByStore),
       invoke(exports.getAverageFulfillmentTime),
     ]);
-    const substitutionAverage = substitution.stores.length
-      ? substitution.stores.reduce((total, store) => total + Number(store.substitution_rate || 0), 0) / substitution.stores.length
+
+    const storeList = substitution?.stores || [];
+    const substitutionAverage = storeList.length
+      ? storeList.reduce((total, store) => total + Number(store.substitution_rate || 0), 0) / storeList.length
       : 0;
+
     const slaScore = Math.max(0, 100 - Math.max(0, Number(fulfillment.overall_average_minutes || 0) - 10) * 5);
     const substitutionScore = Math.max(0, 100 - substitutionAverage * 2);
     const health_score = Math.round((slaScore * 0.55) + (substitutionScore * 0.45));
-    const flagged = substitution.stores.filter((store) => store.flagged).length;
+    const flagged = storeList.filter((store) => store.flagged).length;
     const label = health_score >= 80 ? 'Healthy network' : health_score >= 60 ? 'Needs attention' : 'Action required';
     const summary = flagged
       ? `${flagged} store${flagged === 1 ? '' : 's'} need substitution review.`
       : `Fulfillment is averaging ${Number(fulfillment.overall_average_minutes || 0).toFixed(1)} minutes.`;
-    return res.status(200).json({ metrics, substitution, fulfillment, performance: { health_score, label, summary, flagged_stores: flagged, average_substitution_rate: Number(substitutionAverage.toFixed(1)) }, generated_at: new Date().toISOString() });
+
+    return res.status(200).json({
+      metrics,
+      substitution,
+      fulfillment,
+      performance: {
+        health_score,
+        label,
+        summary,
+        flagged_stores: flagged,
+        average_substitution_rate: Number(substitutionAverage.toFixed(1)),
+      },
+      generated_at: new Date().toISOString(),
+    });
   } catch (error) {
     return res.status(500).json({ error: 'Failed to fetch dashboard data', details: error.message });
   }
 };
-const SUBSTITUTION_RATE_FLAG_THRESHOLD = 25; // 25% chosen as a starting point – higher rates likely indicate stock sync issues
 
 /**
  * GET /api/admin/metrics
- * 
- * Computes top-level operational metrics from database tables (`order_table`, `stores`, `delivery_partners`):
- * - total_orders
- * - total_revenue
- * - average_order_value
- * - active_stores
- * - active_delivery_partners
- * - status_breakdown
- * - recent_orders
  */
 exports.getMetrics = async (req, res) => {
   try {
-    // 1. Fetch all orders with store info
     const { data: orders, error: ordersErr } = await supabase
       .from('order_table')
       .select('order_id, order_status, order_date, total_amount, store_id, stores(name)')
@@ -65,7 +75,6 @@ exports.getMetrics = async (req, res) => {
     const allOrders = orders || [];
     const total_orders = allOrders.length;
 
-    // Calculate revenue & average order value
     const total_revenue = allOrders.reduce((sum, o) => {
       const amt = parseFloat(o.total_amount) || 0;
       return sum + amt;
@@ -75,7 +84,6 @@ exports.getMetrics = async (req, res) => {
       ? Number((total_revenue / total_orders).toFixed(2))
       : 0;
 
-    // Status breakdown
     const status_breakdown = {
       PENDING: 0,
       PICKING: 0,
@@ -94,12 +102,10 @@ exports.getMetrics = async (req, res) => {
       }
     });
 
-    // 2. Fetch stores count
     const { count: storesCount } = await supabase
       .from('stores')
       .select('*', { count: 'exact', head: true });
 
-    // 3. Fetch active delivery partners count
     const { data: partners } = await supabase
       .from('delivery_partners')
       .select('id, status');
@@ -108,7 +114,6 @@ exports.getMetrics = async (req, res) => {
       (p) => p.status === 'AVAILABLE' || p.status === 'BUSY'
     ).length;
 
-    // Format recent orders for dashboard table
     const recent_orders = allOrders.slice(0, 10).map((o) => ({
       order_id: o.order_id,
       store_name: o.stores?.name || 'Store Hub',
@@ -134,24 +139,67 @@ exports.getMetrics = async (req, res) => {
   }
 };
 
+/**
+ * GET /api/admin/flagged-stores
+ * Dynamic Supabase query for stores exceeding substitution threshold
+ */
 exports.getFlaggedStores = async (req, res) => {
-  res.status(200).json({ message: 'Flagged stores placeholder' });
+  try {
+    const { data: stores, error: storesErr } = await supabase.from('stores').select('id, name, location');
+    if (storesErr || !stores) {
+      return res.status(200).json({ flag_threshold: SUBSTITUTION_RATE_FLAG_THRESHOLD, flagged_stores: [] });
+    }
+
+    const { data: orders } = await supabase.from('order_table').select('order_id, store_id');
+    const { data: orderItems } = await supabase.from('item_table').select('order_id, status, resolution_status');
+
+    const substitutedOrderIds = new Set();
+    (orderItems || []).forEach((item) => {
+      const resStatus = (item.resolution_status || '').toUpperCase();
+      if (resStatus === 'SUBSTITUTED' || resStatus === 'SKIPPED') {
+        substitutedOrderIds.add(item.order_id);
+      }
+    });
+
+    const flaggedStores = stores.map((store) => {
+      const storeOrders = (orders || []).filter((o) => o.store_id === store.id);
+      const total_orders = storeOrders.length;
+      const orders_with_substitution = storeOrders.filter((o) => substitutedOrderIds.has(o.order_id)).length;
+      const substitution_rate = total_orders > 0
+        ? Number(((orders_with_substitution / total_orders) * 100).toFixed(1))
+        : 0;
+
+      return {
+        store_id: store.id,
+        store_name: store.name,
+        location: store.location || 'Central Dark Store',
+        total_orders,
+        orders_with_substitution,
+        substitution_rate,
+        flagged: substitution_rate >= SUBSTITUTION_RATE_FLAG_THRESHOLD,
+      };
+    }).filter((s) => s.flagged);
+
+    return res.status(200).json({
+      flag_threshold: SUBSTITUTION_RATE_FLAG_THRESHOLD,
+      flagged_count: flaggedStores.length,
+      flagged_stores: flaggedStores,
+    });
+  } catch (error) {
+    return res.status(500).json({ error: 'Failed to fetch flagged stores', details: error.message });
+  }
 };
 
 /**
  * GET /api/admin/metrics/substitution-rate
- * 
- * Returns the percentage of orders per store that had at least one substitution or skip event.
- * Handles edge case where a store has 0 orders (returns substitution_rate: 0 instead of NaN/null).
  */
 exports.getSubstitutionRateByStore = async (req, res) => {
   try {
-    // 1. Attempt querying PostgreSQL view `store_substitution_rates`
     const { data: viewData, error: viewError } = await supabase
       .from('store_substitution_rates')
       .select('*');
 
-    if (!viewError && viewData) {
+    if (!viewError && viewData && viewData.length > 0) {
       const formatted = viewData.map((item) => {
         const total = Number(item.total_orders || 0);
         const subCount = Number(item.orders_with_substitution || 0);
@@ -168,17 +216,14 @@ exports.getSubstitutionRateByStore = async (req, res) => {
       return res.status(200).json({ flag_threshold: SUBSTITUTION_RATE_FLAG_THRESHOLD, stores: formatted });
     }
 
-    // 2. Fallback JS aggregation if DB view is missing or inaccessible
     const { data: stores, error: storesErr } = await supabase.from('stores').select('id, name');
     if (storesErr || !stores) {
-      return res.status(200).json([]);
+      return res.status(200).json({ flag_threshold: SUBSTITUTION_RATE_FLAG_THRESHOLD, stores: [] });
     }
 
-    // Fallback using the correct tables
     const { data: orders } = await supabase.from('order_table').select('order_id, store_id');
-    const { data: orderItems } = await supabase.from('item_table').select('order_id, status');
+    const { data: orderItems } = await supabase.from('item_table').select('order_id, status, resolution_status');
 
-    // Collect order IDs that contain substitution or skip events
     const substitutedOrderIds = new Set();
     (orderItems || []).forEach((item) => {
       const resStatus = (item.resolution_status || '').toUpperCase();
@@ -190,7 +235,7 @@ exports.getSubstitutionRateByStore = async (req, res) => {
     const metrics = stores.map((store) => {
       const storeOrders = (orders || []).filter((o) => o.store_id === store.id);
       const total_orders = storeOrders.length;
-      const orders_with_substitution = storeOrders.filter((o) => substitutedOrderIds.has(o.id)).length;
+      const orders_with_substitution = storeOrders.filter((o) => substitutedOrderIds.has(o.order_id)).length;
 
       const substitution_rate = total_orders > 0
         ? Number(((orders_with_substitution / total_orders) * 100).toFixed(1))
@@ -217,20 +262,13 @@ exports.getSubstitutionRateByStore = async (req, res) => {
 
 /**
  * GET /api/admin/metrics/fulfillment-time
- * 
- * Returns overall average fulfillment time (in minutes) and per-store breakdown.
- * Filters out orders where finalized_at IS NULL.
- * Excludes stores with 0 finalized orders from per_store list.
  */
 exports.getAverageFulfillmentTime = async (req, res) => {
   try {
-    // 1. Attempt querying PostgreSQL view `store_fulfillment_times`
     const { data: viewData, error: viewError } = await supabase
       .from('store_fulfillment_times')
       .select('*');
 
-    // 2. Query finalized orders to compute overall average & JS fallback if needed
-    // Query the correct table (order_table) and use the proper column names
     const { data: orders, error: ordersError } = await supabase
       .from('order_table')
       .select('order_id, store_id, order_date, finalized_at')
@@ -256,7 +294,6 @@ exports.getAverageFulfillmentTime = async (req, res) => {
       overallAverageMinutes = Number((totalMinutes / validOrders.length).toFixed(1));
     }
 
-    // If SQL view worked, build per_store list from view; otherwise fallback JS calculation
     let perStore = [];
 
     if (!viewError && viewData && viewData.length > 0) {
@@ -274,7 +311,7 @@ exports.getAverageFulfillmentTime = async (req, res) => {
 
       validOrders.forEach((o) => {
         if (!o.store_id) return;
-        const start = new Date(o.placed_at || o.created_at).getTime();
+        const start = new Date(o.order_date).getTime();
         const end = new Date(o.finalized_at).getTime();
         const diffMinutes = Math.max(0, (end - start) / (1000 * 60));
 
@@ -298,7 +335,6 @@ exports.getAverageFulfillmentTime = async (req, res) => {
       });
     }
 
-    // If overall average is still 0, compute it from the per-store data (weighted average)
     if (overallAverageMinutes === 0 && perStore.length > 0) {
       const totalOrders = perStore.reduce((sum, s) => sum + (s.order_count || 0), 0);
       const weightedSum = perStore.reduce((sum, s) => sum + ((s.average_minutes || 0) * (s.order_count || 0)), 0);
@@ -316,5 +352,3 @@ exports.getAverageFulfillmentTime = async (req, res) => {
     });
   }
 };
-
-

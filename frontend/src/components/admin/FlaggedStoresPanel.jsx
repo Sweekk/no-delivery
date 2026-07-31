@@ -6,10 +6,13 @@ import React, { useState } from "react";
  * Features interactive threshold adjustment and store inventory sync triggers.
  */
 export default function FlaggedStoresPanel({
-  stores = [],
-  threshold: initialThreshold = 25,
+  data,
+  stores: storesProp,
+  threshold: initialThreshold,
 }) {
-  const [threshold, setThreshold] = useState(initialThreshold);
+  const stores = storesProp || data?.stores || [];
+  const defaultThreshold = initialThreshold || data?.flag_threshold || 25;
+  const [threshold, setThreshold] = useState(defaultThreshold);
   const [syncingStore, setSyncingStore] = useState(null);
   const [syncSuccess, setSyncSuccess] = useState("");
 
