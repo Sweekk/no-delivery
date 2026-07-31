@@ -85,7 +85,7 @@ const updateItemStatus = async (req, res) => {
   }
 
   // 2. Validate the status
-  const validStatuses = ['pending', 'found', 'not_found', 'replaced'];
+  const validStatuses = ['pending', 'found', 'not_found', 'replaced', 'awaiting_customer'];
   if (!status || !validStatuses.includes(status)) {
     return res.status(400).json({
       error: 'Bad Request',
@@ -193,13 +193,13 @@ const completeOrder = async (req, res) => {
       });
     }
 
-    // 4. Check if any items are pending
-    const pendingItems = items.filter(item => item.status === 'pending');
-    if (pendingItems.length > 0) {
+    // 4. Check if any items are pending or awaiting customer response
+    const incompleteItems = items.filter(item => item.status === 'pending' || item.status === 'awaiting_customer');
+    if (incompleteItems.length > 0) {
       return res.status(400).json({
         error: 'Bad Request',
-        message: 'Cannot complete order. Some items are still pending.',
-        pending_items: pendingItems
+        message: 'Cannot complete order. Some items are still pending or awaiting customer response.',
+        pending_items: incompleteItems
       });
     }
 

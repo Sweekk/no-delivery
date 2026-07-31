@@ -22,7 +22,7 @@ CREATE TABLE item_table (
     item_id TEXT NOT NULL,
     sub_rules TEXT CHECK (sub_rules IN ('auto', 'skip', 'ask')),
     qty_requested INTEGER NOT NULL DEFAULT 1,
-    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'found', 'not_found', 'replaced')),
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'found', 'not_found', 'replaced', 'awaiting_customer')),
     replacement_item_id TEXT,
     item_price DECIMAL(10, 2) DEFAULT 0.00
 );

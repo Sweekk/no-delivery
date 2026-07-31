@@ -8,6 +8,7 @@ app.use(express.json());
 
 // Routes
 app.use('/api/orders', require('./routes/orders'));
+app.use('/api/customer', require('./routes/customerOrder'));
 app.use('/api/picker', require('./routes/picker'));
 app.use('/api/substitution', require('./routes/substitution'));
 app.use('/api/dispatch', require('./routes/dispatch'));
