@@ -1,5 +1,4 @@
 import React from 'react';
-<<<<<<< HEAD
 import Navbar from '../components/common/Navbar';
 import ActiveRunUI from '../components/picker/ActiveRunUI';
 import NotFoundButton from '../components/picker/NotFoundButton';
@@ -18,10 +17,4 @@ export default function PickerRun({ onNavigate }) {
       </main>
     </div>
   );
-=======
-import { PickerQueue } from './picker/PickerQueue.jsx';
-
-export default function PickerRun(props) {
-  return <PickerQueue {...props} />;
->>>>>>> customer
 }

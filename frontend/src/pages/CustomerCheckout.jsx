@@ -1,5 +1,4 @@
 import React from 'react';
-<<<<<<< HEAD
 import Navbar from '../components/common/Navbar';
 import CartUI from '../components/customer/CartUI';
 import ReviewSubstitutesModal from '../components/customer/ReviewSubstitutesModal';
@@ -18,10 +17,4 @@ export default function CustomerCheckout({ onNavigate }) {
       </main>
     </div>
   );
-=======
-import { Home as CustomerHome } from './customer/Home.jsx';
-
-export default function CustomerCheckout(props) {
-  return <CustomerHome {...props} />;
->>>>>>> customer
 }
