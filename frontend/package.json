@@ -2,11 +2,26 @@
   "name": "frontend",
   "version": "1.0.0",
   "description": "React + Vite frontend for delivery partners.",
+  "type": "module",
   "main": "eslint.config.js",
   "devDependencies": {},
   "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "canvas-confetti": "^1.9.4",
+    "csstype": "^3.2.3",
+    "detect-libc": "^2.1.2",
+    "lightningcss": "^1.32.0",
+    "lightningcss-win32-x64-msvc": "^1.32.0",
+    "lucide-react": "^1.28.0",
+    "oxlint": "^1.76.0",
+    "rolldown": "^1.1.5",
+    "vite": "^8.1.5"
+  }
 }
