@@ -38,21 +38,20 @@ ALTER TABLE order_table DISABLE ROW LEVEL SECURITY;
 
 -- ITEM TABLE (from customer's list)
 CREATE TABLE IF NOT EXISTS item_table (
-  list_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  list UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   order_id UUID REFERENCES order_table(order_id) ON DELETE CASCADE,
   item_id UUID,
   sub_rules VARCHAR(10) NOT NULL DEFAULT 'ask', -- auto, skip, ask
   qty_requested INT NOT NULL DEFAULT 1,
-  status VARCHAR(50) NOT NULL DEFAULT 'pending', -- pending, found, not_found, replaced, awaiting_customer
-  replacement_item_id UUID,
-  CONSTRAINT item_table_status_check CHECK (status IN ('pending', 'found', 'not_found', 'replaced', 'awaiting_customer'))
+  status VARCHAR(50) NOT NULL DEFAULT 'PENDING', -- PENDING, PICKED, SUBSTITUTED, SKIPPED, CONFIRMED
+  replacement_item_id UUID
 );
 ALTER TABLE item_table DISABLE ROW LEVEL SECURITY;
 
 -- SUBSTITUTIONS LOG
 CREATE TABLE IF NOT EXISTS substitutions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  order_item_id UUID REFERENCES item_table(list_id) ON DELETE CASCADE,
+  order_item_id UUID REFERENCES item_table(list) ON DELETE CASCADE,
   original_product_id UUID,
   proposed_product_id UUID,
   status VARCHAR(50) DEFAULT 'pending', -- pending, accepted, rejected, timed_out
@@ -143,3 +142,5 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE INDEX IF NOT EXISTS idx_users_username ON users (username);
 ALTER TABLE users DISABLE ROW LEVEL SECURITY;
+
+

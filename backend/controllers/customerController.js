@@ -1,5 +1,6 @@
 const supabase = require('../lib/supabaseClient');
 
+<<<<<<< HEAD
 const PRODUCT_MAPPING = {
   'APPLE-FUJI-01': 'a0000000-0000-0000-0000-000000000001',
   'MILK-GAL-02': 'a0000000-0000-0000-0000-000000000002',
@@ -18,6 +19,8 @@ const INVERSE_PRODUCT_MAPPING = {
   'a0000000-0000-0000-0000-000000000006': 'EGGS-DOZ-06'
 };
 
+=======
+>>>>>>> bdev
 // PATCH: Customer resolves an 'ask' sub-rule
 const resolveItemAction = async (req, res) => {
   const { list_id } = req.params;
@@ -41,7 +44,11 @@ const resolveItemAction = async (req, res) => {
   try {
     // 2. Determine the new database values based on the customer's choice
     const newStatus = action === 'skip' ? 'not_found' : 'replaced';
+<<<<<<< HEAD
     const newReplacementId = action === 'skip' ? null : (PRODUCT_MAPPING[replacement_item_id] || replacement_item_id);
+=======
+    const newReplacementId = action === 'skip' ? null : replacement_item_id;
+>>>>>>> bdev
 
     // 3. Update the database, ensuring we ONLY update items waiting on the customer
     const { data, error } = await supabase
@@ -50,7 +57,11 @@ const resolveItemAction = async (req, res) => {
         status: newStatus, 
         replacement_item_id: newReplacementId 
       })
+<<<<<<< HEAD
       .eq('list', list_id)
+=======
+      .eq('list_id', list_id)
+>>>>>>> bdev
       .eq('status', 'awaiting_customer') // Security: Prevent updating already picked items
       .select()
       .single();
@@ -88,12 +99,21 @@ const getOrderStatus = async (req, res) => {
         order_status,
         order_date,
         items:item_table (
+<<<<<<< HEAD
           list,
+=======
+          list_id,
+>>>>>>> bdev
           item_id,
           qty_requested,
           sub_rules,
           status,
+<<<<<<< HEAD
           replacement_item_id
+=======
+          replacement_item_id,
+          item_price
+>>>>>>> bdev
         )
       `)
       .eq('order_id', order_id)
@@ -113,6 +133,7 @@ const getOrderStatus = async (req, res) => {
       });
     }
 
+<<<<<<< HEAD
     // Map UUIDs back to frontend product codes and list back to list_id
     if (data && data.items) {
       data.items = data.items.map(item => {
@@ -126,6 +147,8 @@ const getOrderStatus = async (req, res) => {
       });
     }
 
+=======
+>>>>>>> bdev
     return res.status(200).json(data);
   } catch (err) {
     console.error('Unexpected Error in getOrderStatus:', err);

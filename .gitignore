@@ -1,4 +1,34 @@
-node_modules/
+# Environment files
+backend/.env
 .env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Dependencies
+node_modules/
 backend/node_modules/
 frontend/node_modules/
+
+# Production / Build output
+build/
+dist/
+frontend/build/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs/
+*.log
+
+# Editor / OS directories & files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Agent / Tooling local caches
+.agents/
+skills-lock.json

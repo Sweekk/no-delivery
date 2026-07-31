@@ -8,28 +8,21 @@ async function seed() {
     console.log('Cleaning up existing data...');
     
     // Delete in reverse order of dependencies to respect foreign key constraints
-    const { error: deleteSubsErr } = await supabase.from('substitutions').delete().neq('status', 'invalid-status-placeholder');
-    if (deleteSubsErr) console.warn('Warning deleting from substitutions:', deleteSubsErr.message);
-
-    const { error: deleteItemsErr } = await supabase.from('item_table').delete().neq('status', 'invalid-status-placeholder');
+    const { error: deleteItemsErr } = await supabase.from('item_table').delete().neq('item_id', '');
     if (deleteItemsErr) console.warn('Warning deleting from item_table:', deleteItemsErr.message);
 
-    const { error: deleteOrdersErr } = await supabase.from('order_table').delete().neq('order_status', 'invalid-status-placeholder');
+    const { error: deleteOrdersErr } = await supabase.from('order_table').delete().neq('order_status', '');
     if (deleteOrdersErr) console.warn('Warning deleting from order_table:', deleteOrdersErr.message);
 
-    const { error: deleteStoresErr } = await supabase.from('stores').delete().neq('name', 'invalid-store-placeholder');
-    if (deleteStoresErr) console.warn('Warning deleting from stores:', deleteStoresErr.message);
-
-    const { error: deletePartnersErr } = await supabase.from('delivery_partners').delete().neq('name', 'invalid-partner-placeholder');
-    if (deletePartnersErr) console.warn('Warning deleting from delivery_partners:', deletePartnersErr.message);
+    const { error: deleteStoresErr } = await supabase.from('store_table').delete().neq('store_name', '');
+    if (deleteStoresErr) console.warn('Warning deleting from store_table:', deleteStoresErr.message);
 
     // 2. Insert mock stores
     console.log('Inserting mock store...');
     const { data: storeData, error: storeErr } = await supabase
-      .from('stores')
+      .from('store_table')
       .insert([
-        { name: 'Metro Grocers' },
-        { name: 'QuickFix Indiranagar' }
+        { store_name: 'Metro Grocers' }
       ])
       .select();
 
@@ -37,14 +30,7 @@ async function seed() {
       throw new Error(`Failed to insert store: ${storeErr.message}`);
     }
     const store = storeData[0];
-    console.log(`Successfully created store: ${store.name} (${store.id})`);
-
-    // Insert mock delivery partners
-    console.log('Inserting mock delivery partners...');
-    await supabase.from('delivery_partners').insert([
-      { name: 'Ramesh Kumar', status: 'AVAILABLE' },
-      { name: 'Priya Sharma', status: 'BUSY' }
-    ]);
+    console.log(`Successfully created store: ${store.store_name} (${store.store_id})`);
 
     // 3. Insert mock orders
     console.log('Inserting mock orders...');
@@ -55,15 +41,15 @@ async function seed() {
       .from('order_table')
       .insert([
         {
-          order_status: 'PENDING',
+          order_status: 'pending_pick',
           order_date: orderDate1.toISOString(),
-          store_id: store.id,
+          store_id: store.store_id,
           total_amount: 24.50
         },
         {
-          order_status: 'FINALIZED',
+          order_status: 'picked',
           order_date: orderDate2.toISOString(),
-          store_id: store.id,
+          store_id: store.store_id,
           total_amount: 15.99
         }
       ])
@@ -84,31 +70,35 @@ async function seed() {
       .insert([
         {
           order_id: order1.order_id,
-          item_id: 'e0000001-0000-0000-0000-000000000001',
+          item_id: 'Cereal Box',
           sub_rules: 'ask',
           qty_requested: 2,
-          status: 'PENDING'
+          status: 'pending',
+          item_price: 4.99
         },
         {
           order_id: order1.order_id,
-          item_id: 'e0000002-0000-0000-0000-000000000002',
+          item_id: 'Fresh Milk 1L',
           sub_rules: 'auto',
           qty_requested: 1,
-          status: 'PENDING'
+          status: 'pending',
+          item_price: 2.50
         },
         {
           order_id: order1.order_id,
-          item_id: 'e0000003-0000-0000-0000-000000000003',
+          item_id: 'Organic Bananas',
           sub_rules: 'skip',
           qty_requested: 5,
-          status: 'PENDING'
+          status: 'pending',
+          item_price: 0.79
         },
         {
           order_id: order2.order_id,
-          item_id: 'e0000004-0000-0000-0000-000000000004',
+          item_id: 'Whole Wheat Bread',
           sub_rules: 'skip',
           qty_requested: 1,
-          status: 'PICKED'
+          status: 'found',
+          item_price: 3.49
         }
       ]);
 
