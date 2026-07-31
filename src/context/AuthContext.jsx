@@ -1,26 +1,53 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { ROLES } from '../data/roles.js';
-
-const INITIAL_USERS = ROLES.map((r, index) => ({
-  id: `usr-${index + 1}`,
-  name: `${r.label} Demo User`,
-  username: r.label.toLowerCase().replace(/\s+/g, '_'),
-  email: r.demoEmail,
-  mobile: '+1 800-555-0199',
-  role: r.id,
-  storeName: r.id === 'picker' ? 'FreshMart Green Park Branch #402' : undefined,
-}));
+import {
+  hashPassword,
+  validateEmail,
+  validatePassword,
+  loadUsersFromStorage,
+  saveUsersToStorage,
+} from '../utils/auth.js';
 
 const AuthContext = createContext(undefined);
+const AUTH_STORAGE_KEY = 'freshbasket_auth';
 
 export const AuthProvider = ({ children }) => {
-  const [users, setUsers] = useState(INITIAL_USERS);
+  const [users, setUsers] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [selectedRole, setSelectedRole] = useState('customer');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [activeView, setActiveView] = useState('login');
   const [substitutionPref, setSubstitutionPref] = useState('ask_first');
   const [toastMessage, setToastMessage] = useState(null);
+
+  // Load stored users and restored session on mount
+  useEffect(() => {
+    let isMounted = true;
+
+    // Check persistent active session first
+    try {
+      const savedAuth = localStorage.getItem(AUTH_STORAGE_KEY);
+      if (savedAuth) {
+        const parsed = JSON.parse(savedAuth);
+        if (parsed && parsed.role) {
+          setCurrentUser(parsed);
+          setSelectedRole(parsed.role);
+          setActiveView('dashboard');
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to parse saved auth session:', err);
+    }
+
+    loadUsersFromStorage().then(loadedUsers => {
+      if (isMounted) {
+        setUsers(loadedUsers);
+        setIsLoading(false);
+      }
+    });
+
+    return () => { isMounted = false; };
+  }, []);
 
   const showToast = (msg) => {
     setToastMessage(msg);
@@ -39,11 +66,10 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (emailOrUsername, password, role) => {
     setIsLoading(true);
-    await new Promise(res => setTimeout(res, 600));
 
     const errors = {};
 
-    if (!emailOrUsername.trim()) {
+    if (!emailOrUsername || !emailOrUsername.trim()) {
       errors.email = 'Email or Username is required';
     }
 
@@ -57,23 +83,26 @@ export const AuthProvider = ({ children }) => {
     }
 
     if (emailOrUsername.includes('@')) {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(emailOrUsername)) {
+      if (!validateEmail(emailOrUsername)) {
         setIsLoading(false);
         return { success: false, errors: { email: 'Please enter a valid email address' } };
       }
     }
 
+    const targetTerm = emailOrUsername.toLowerCase().trim();
     const foundUser = users.find(
-      u => u.email.toLowerCase() === emailOrUsername.toLowerCase().trim() ||
-           u.username.toLowerCase() === emailOrUsername.toLowerCase().trim()
+      u => u.email.toLowerCase() === targetTerm ||
+           (u.username && u.username.toLowerCase() === targetTerm)
     );
 
-    if (!foundUser) {
+    // Verify password hash securely
+    const inputHash = await hashPassword(password);
+
+    if (!foundUser || foundUser.passwordHash !== inputHash) {
       setIsLoading(false);
       return {
         success: false,
-        errors: { general: 'No account found with this email or username.' }
+        errors: { general: 'Invalid email/username or password combination.' }
       };
     }
 
@@ -83,9 +112,16 @@ export const AuthProvider = ({ children }) => {
       return {
         success: false,
         errors: {
-          role: `Access Denied: Account registered as [${assignedRoleConfig?.label}].`
+          role: `Access Denied: Account registered as [${assignedRoleConfig?.label || foundUser.role}].`
         }
       };
+    }
+
+    // Persist authenticated session
+    try {
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(foundUser));
+    } catch (err) {
+      console.warn('Could not save auth session to localStorage:', err);
     }
 
     setCurrentUser(foundUser);
@@ -98,23 +134,21 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (userData) => {
     setIsLoading(true);
-    await new Promise(res => setTimeout(res, 600));
 
     const errors = {};
 
-    if (!userData.fullName.trim()) errors.fullName = 'Full Name is required';
-    if (!userData.username.trim()) errors.username = 'Username is required';
+    if (!userData.fullName || !userData.fullName.trim()) errors.fullName = 'Full Name is required';
     
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!userData.email.trim() || !emailRegex.test(userData.email)) {
-      errors.email = 'Valid email is required';
+    const emailTrimmed = (userData.email || '').trim().toLowerCase();
+    if (!emailTrimmed || !validateEmail(emailTrimmed)) {
+      errors.email = 'Valid email address is required';
     }
 
-    if (!userData.mobile.trim() || userData.mobile.length < 8) {
+    if (!userData.mobile || userData.mobile.trim().length < 8) {
       errors.mobile = 'Valid phone number is required';
     }
 
-    if (!userData.password || userData.password.length < 6) {
+    if (!userData.password || !validatePassword(userData.password)) {
       errors.password = 'Password must be at least 6 characters';
     }
 
@@ -123,31 +157,45 @@ export const AuthProvider = ({ children }) => {
       return { success: false, errors };
     }
 
+    const usernameDerived = userData.username || emailTrimmed.split('@')[0];
+
     const existing = users.find(
-      u => u.email.toLowerCase() === userData.email.toLowerCase() ||
-           u.username.toLowerCase() === userData.username.toLowerCase()
+      u => u.email.toLowerCase() === emailTrimmed ||
+           (u.username && u.username.toLowerCase() === usernameDerived.toLowerCase())
     );
 
     if (existing) {
       setIsLoading(false);
       return {
         success: false,
-        errors: { general: 'An account with this email or username already exists.' }
+        errors: { general: 'An account with this email address already exists.' }
       };
     }
 
+    const passwordHash = await hashPassword(userData.password);
+
     const newUser = {
       id: `usr-${Date.now()}`,
-      name: userData.fullName,
-      username: userData.username,
-      email: userData.email,
-      mobile: userData.mobile,
-      role: userData.role,
+      name: userData.fullName.trim(),
+      username: usernameDerived,
+      email: emailTrimmed,
+      mobile: userData.mobile.trim(),
+      role: userData.role || 'customer',
+      passwordHash,
     };
 
-    setUsers(prev => [...prev, newUser]);
+    const updatedUsers = [...users, newUser];
+    setUsers(updatedUsers);
+    saveUsersToStorage(updatedUsers);
+
+    try {
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
+    } catch (err) {
+      console.warn('Could not save auth session to localStorage:', err);
+    }
+
     setCurrentUser(newUser);
-    setSelectedRole(userData.role);
+    setSelectedRole(newUser.role);
     setIsLoading(false);
     setActiveView('dashboard');
     showToast(`Account created successfully! Welcome, ${newUser.name}.`);
@@ -155,7 +203,41 @@ export const AuthProvider = ({ children }) => {
     return { success: true };
   };
 
+  const resetPassword = async (email, newPassword) => {
+    const emailTrimmed = (email || '').trim().toLowerCase();
+    if (!emailTrimmed || !validateEmail(emailTrimmed)) {
+      return { success: false, error: 'Please enter a valid email address.' };
+    }
+
+    if (!newPassword || !validatePassword(newPassword)) {
+      return { success: false, error: 'New password must be at least 6 characters long.' };
+    }
+
+    const userIndex = users.findIndex(u => u.email.toLowerCase() === emailTrimmed);
+    if (userIndex === -1) {
+      return { success: false, error: 'No account found with this email address.' };
+    }
+
+    const newHash = await hashPassword(newPassword);
+    const updatedUsers = [...users];
+    updatedUsers[userIndex] = {
+      ...updatedUsers[userIndex],
+      passwordHash: newHash,
+    };
+
+    setUsers(updatedUsers);
+    saveUsersToStorage(updatedUsers);
+    showToast('Password reset successfully! You can now log in with your new password.');
+
+    return { success: true };
+  };
+
   const logout = () => {
+    try {
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+    } catch (err) {
+      console.warn('Could not remove auth session from localStorage:', err);
+    }
     setCurrentUser(null);
     setActiveView('login');
     showToast('Signed out successfully.');
@@ -164,11 +246,13 @@ export const AuthProvider = ({ children }) => {
   return (
     <AuthContext.Provider
       value={{
+        users,
         currentUser,
         selectedRole,
         setSelectedRole,
         login,
         register,
+        resetPassword,
         logout,
         isLoading,
         activeView,

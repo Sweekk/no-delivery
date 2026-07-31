@@ -9,6 +9,7 @@ import {
 } from '../utils/auth.js';
 
 const AuthContext = createContext(undefined);
+const AUTH_STORAGE_KEY = 'freshbasket_auth';
 
 export const AuthProvider = ({ children }) => {
   const [users, setUsers] = useState([]);
@@ -19,15 +20,32 @@ export const AuthProvider = ({ children }) => {
   const [substitutionPref, setSubstitutionPref] = useState('ask_first');
   const [toastMessage, setToastMessage] = useState(null);
 
-  // Load stored users on mount
+  // Load stored users and restored session on mount
   useEffect(() => {
     let isMounted = true;
+
+    // Check persistent active session first
+    try {
+      const savedAuth = localStorage.getItem(AUTH_STORAGE_KEY);
+      if (savedAuth) {
+        const parsed = JSON.parse(savedAuth);
+        if (parsed && parsed.role) {
+          setCurrentUser(parsed);
+          setSelectedRole(parsed.role);
+          setActiveView('dashboard');
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to parse saved auth session:', err);
+    }
+
     loadUsersFromStorage().then(loadedUsers => {
       if (isMounted) {
         setUsers(loadedUsers);
         setIsLoading(false);
       }
     });
+
     return () => { isMounted = false; };
   }, []);
 
@@ -99,6 +117,13 @@ export const AuthProvider = ({ children }) => {
       };
     }
 
+    // Persist authenticated session
+    try {
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(foundUser));
+    } catch (err) {
+      console.warn('Could not save auth session to localStorage:', err);
+    }
+
     setCurrentUser(foundUser);
     setIsLoading(false);
     setActiveView('dashboard');
@@ -163,6 +188,12 @@ export const AuthProvider = ({ children }) => {
     setUsers(updatedUsers);
     saveUsersToStorage(updatedUsers);
 
+    try {
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(newUser));
+    } catch (err) {
+      console.warn('Could not save auth session to localStorage:', err);
+    }
+
     setCurrentUser(newUser);
     setSelectedRole(newUser.role);
     setIsLoading(false);
@@ -202,6 +233,11 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
+    try {
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+    } catch (err) {
+      console.warn('Could not remove auth session from localStorage:', err);
+    }
     setCurrentUser(null);
     setActiveView('login');
     showToast('Signed out successfully.');

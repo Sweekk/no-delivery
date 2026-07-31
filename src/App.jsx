@@ -7,8 +7,6 @@ import {
   ArrowRight,
   RefreshCw,
   ShoppingBasket,
-  ShieldCheck,
-  ShoppingCart,
 } from 'lucide-react';
 
 import { ROLES } from './data/roles.js';
@@ -20,13 +18,24 @@ import { CreateAccountModal } from './components/auth/CreateAccountModal.jsx';
 import { TermsModal } from './components/auth/TermsModal.jsx';
 
 // Multi-Role Pages
+import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import { OrderProvider } from './context/OrderContext.jsx';
 import { Home as CustomerHome } from './pages/customer/Home.jsx';
 import { PickerQueue } from './pages/picker/PickerQueue.jsx';
 import { AdminDashboard } from './pages/admin/Dashboard.jsx';
+import { DeliveryPortal } from './pages/delivery/DeliveryPortal.jsx';
 
 function MainAppContent() {
-  const [selectedRole, setSelectedRole] = useState('customer');
+  const {
+    currentUser,
+    selectedRole,
+    setSelectedRole,
+    login,
+    logout,
+    isLoading: isAuthLoading,
+    fillDemoCredentials,
+  } = useAuth();
+
   const [emailOrUsername, setEmailOrUsername] = useState('alex.customer@quickfix.com');
   const [password, setPassword] = useState('Password123!');
   const [showPassword, setShowPassword] = useState(false);
@@ -38,7 +47,6 @@ function MainAppContent() {
   const [isForgotModalOpen, setIsForgotModalOpen] = useState(false);
   const [isCreateAccountOpen, setIsCreateAccountOpen] = useState(false);
   const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
-  const [loggedInUser, setLoggedInUser] = useState(null);
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
@@ -50,15 +58,16 @@ function MainAppContent() {
   const handleRoleChange = (role) => {
     setSelectedRole(role);
     setErrorMessage('');
+    const demo = fillDemoCredentials(role);
+    setEmailOrUsername(demo.email);
+    setPassword(demo.pass);
     const config = ROLES.find((r) => r.id === role);
     if (config) {
-      setEmailOrUsername(config.demoEmail);
-      setPassword(config.demoPassword);
       showToast(`Switched role to ${config.label}. Demo credentials auto-filled.`, 'success');
     }
   };
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
     setErrorMessage('');
 
@@ -73,112 +82,50 @@ function MainAppContent() {
     }
 
     setIsLoading(true);
+    const result = await login(emailOrUsername, password, selectedRole);
+    setIsLoading(false);
 
-    setTimeout(() => {
-      setIsLoading(false);
-      const currentRoleObj = ROLES.find((r) => r.id === selectedRole);
-      const roleLabel = currentRoleObj ? currentRoleObj.label : selectedRole;
-      
-      const derivedName = emailOrUsername.includes('@')
-        ? emailOrUsername.split('@')[0].replace('.', ' ').replace(/\b\w/g, c => c.toUpperCase())
-        : emailOrUsername;
-
-      setLoggedInUser({
-        name: derivedName,
-        email: emailOrUsername,
-        role: selectedRole,
-      });
-
-      showToast(`Logged in successfully as ${roleLabel}!`, 'success');
-    }, 600);
-  };
-
-  const handleLogout = () => {
-    setLoggedInUser(null);
-    showToast('Signed out successfully.', 'success');
+    if (!result.success) {
+      setErrorMessage(
+        result.errors?.general ||
+        result.errors?.role ||
+        result.errors?.email ||
+        result.errors?.password ||
+        'Login failed. Please check your credentials.'
+      );
+    }
   };
 
   const activeRoleConfig = ROLES.find((r) => r.id === selectedRole) || ROLES[0];
 
   // LOGGED IN VIEW
-  if (loggedInUser) {
-    if (loggedInUser.role === 'customer') {
+  if (currentUser) {
+    if (currentUser.role === 'customer') {
       return (
         <CustomerHome
-          userName={loggedInUser.name}
-          userEmail={loggedInUser.email}
+          userName={currentUser.name}
+          userEmail={currentUser.email}
           userRole={activeRoleConfig.label}
-          onLogout={handleLogout}
+          onLogout={logout}
         />
       );
     }
 
-    if (loggedInUser.role === 'picker') {
-      return <PickerQueue onLogout={handleLogout} />;
+    if (currentUser.role === 'picker') {
+      return <PickerQueue onLogout={logout} />;
     }
 
-    if (loggedInUser.role === 'admin') {
-      return <AdminDashboard onLogout={handleLogout} />;
+    if (currentUser.role === 'admin') {
+      return <AdminDashboard onLogout={logout} />;
     }
 
-    if (loggedInUser.role === 'delivery') {
-      return (
-        <div className="min-h-screen bg-slate-50 flex flex-col justify-between font-sans">
-          <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between shadow-xs">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 font-bold flex items-center justify-center">
-                🚚
-              </div>
-              <div>
-                <h1 className="font-extrabold text-slate-900 text-base">Delivery Partner Portal</h1>
-                <p className="text-xs text-slate-500">Welcome, {loggedInUser.name}</p>
-              </div>
-            </div>
-            <button
-              onClick={handleLogout}
-              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition cursor-pointer"
-            >
-              Log Out
-            </button>
-          </header>
-          <main className="flex-1 flex flex-col items-center justify-center p-6 text-center max-w-md mx-auto">
-            <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-3xl flex items-center justify-center text-3xl mb-4 shadow-inner">
-              📍
-            </div>
-            <h2 className="text-xl font-bold text-slate-900 mb-2">Delivery Partner Dashboard</h2>
-            <p className="text-sm text-slate-600 mb-6 leading-relaxed">
-              Welcome to the FreshBasket Delivery Fleet Portal. You are logged in as <strong className="text-slate-900">{loggedInUser.email}</strong>.
-            </p>
-            <div className="w-full bg-white p-4 rounded-2xl border border-slate-200 text-left text-xs space-y-2 mb-6 shadow-xs">
-              <div className="flex justify-between py-1 border-b border-slate-100">
-                <span className="text-slate-500">Assigned Hub</span>
-                <span className="font-bold text-slate-800">Central Metro Store #402</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-slate-100">
-                <span className="text-slate-500">Fleet Status</span>
-                <span className="font-bold text-emerald-600">● Active & Ready</span>
-              </div>
-              <div className="flex justify-between py-1">
-                <span className="text-slate-500">App Scope</span>
-                <span className="font-bold text-slate-800">Delivery Mobile Interface</span>
-              </div>
-            </div>
-            <button
-              onClick={handleLogout}
-              className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl shadow-md transition cursor-pointer"
-            >
-              Sign Out to Role Selection
-            </button>
-          </main>
-          <footer className="py-4 text-center text-xs text-slate-400 border-t border-slate-200 bg-white">
-            FreshBasket Fleet &bull; Delivery Partner Console
-          </footer>
-        </div>
-      );
+    if (currentUser.role === 'delivery') {
+      return <DeliveryPortal onLogout={logout} currentUser={currentUser} />;
     }
   }
 
-  // LOGIN PAGE (WHITE BACKGROUND BASE THEME & GROCERY BRANDING)
+
+  // LOGIN PAGE
   return (
     <div className="min-h-screen w-full flex flex-col justify-between bg-white text-slate-900 font-sans">
       <Toast message={toast?.message || null} type={toast?.type} />
@@ -192,8 +139,6 @@ function MainAppContent() {
         onClose={() => setIsCreateAccountOpen(false)}
         onSuccess={(role, email) => {
           setSelectedRole(role);
-          const name = email.split('@')[0].replace('.', ' ').replace(/\b\w/g, c => c.toUpperCase());
-          setLoggedInUser({ name, email, role });
           showToast(`Account created! Welcome to FreshBasket Grocery.`, 'success');
         }}
       />
@@ -226,7 +171,7 @@ function MainAppContent() {
       {/* Main Login Area */}
       <main className="flex-1 flex items-center justify-center px-4 py-8 sm:py-12 bg-white">
         <div className="w-full max-w-xl mx-auto space-y-6">
-          
+
           {/* Grocery Branding Banner */}
           <div className="bg-emerald-50/80 rounded-3xl p-6 border border-emerald-100 text-center space-y-3">
             <div className="w-14 h-14 rounded-2xl bg-white border border-emerald-200 flex items-center justify-center mx-auto text-emerald-600 shadow-xs">
@@ -244,13 +189,13 @@ function MainAppContent() {
 
           {/* Login Form Container */}
           <div className="bg-white rounded-3xl p-6 sm:p-10 border border-slate-200 shadow-xs space-y-6">
-            
+
             {/* Role Selection Tabs (3 Roles: Customer, Picker, Admin) */}
             <div className="space-y-2.5">
               <RoleSelector
                 selectedRole={selectedRole}
                 onSelectRole={handleRoleChange}
-                disabled={isLoading}
+                disabled={isLoading || isAuthLoading}
               />
 
               <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs text-slate-700 font-medium">
@@ -280,7 +225,7 @@ function MainAppContent() {
                     placeholder="e.g. alex.customer@quickfix.com"
                     value={emailOrUsername}
                     onChange={(e) => setEmailOrUsername(e.target.value)}
-                    disabled={isLoading}
+                    disabled={isLoading || isAuthLoading}
                     className="w-full pl-10 pr-4 py-3 rounded-xl bg-white border border-slate-300 text-slate-900 text-sm placeholder-slate-400 focus:outline-none focus:border-emerald-500 font-medium"
                   />
                 </div>
@@ -308,8 +253,8 @@ function MainAppContent() {
                     required
                     placeholder="Enter password"
                     value={password}
-                    onChange={(e) => setShowPassword(e.target.value)}
-                    disabled={isLoading}
+                    onChange={(e) => setPassword(e.target.value)}
+                    disabled={isLoading || isAuthLoading}
                     className="w-full pl-10 pr-11 py-3 rounded-xl bg-white border border-slate-300 text-slate-900 text-sm placeholder-slate-400 focus:outline-none focus:border-emerald-500 font-medium"
                   />
                   <button
@@ -339,10 +284,10 @@ function MainAppContent() {
               {/* Submit Button */}
               <button
                 type="submit"
-                disabled={isLoading}
+                disabled={isLoading || isAuthLoading}
                 className="w-full py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm tracking-wide flex items-center justify-center gap-2 transition cursor-pointer shadow-xs"
               >
-                {isLoading ? (
+                {isLoading || isAuthLoading ? (
                   <span>Logging in...</span>
                 ) : (
                   <>
@@ -390,8 +335,10 @@ function MainAppContent() {
 
 export default function App() {
   return (
-    <OrderProvider>
-      <MainAppContent />
-    </OrderProvider>
+    <AuthProvider>
+      <OrderProvider>
+        <MainAppContent />
+      </OrderProvider>
+    </AuthProvider>
   );
 }
