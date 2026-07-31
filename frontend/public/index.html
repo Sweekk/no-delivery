@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0f9d6e" />
+    <meta name="description" content="QuickFix Grocery - Fast grocery delivery and delivery partner portal" />
+    <title>QuickFix Grocery</title>
+    <!-- Tailwind CSS CDN for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              quickfix: {
+                50: '#e6f7f2',
+                100: '#ccefe4',
+                500: '#0f9d6e',
+                600: '#0c855d',
+                700: '#096b4b',
+                800: '#065239',
+              }
+            }
+          }
+        }
+      }
+    </script>
+    <!-- Google Maps JavaScript API -->
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCcopMJtAOy945c6g1-gOZ6RHc9pqLx9xY&libraries=places,geometry"></script>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+    <!-- Leaflet JS (required for fallback) -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  </head>
+  <body class="bg-gray-50 text-gray-900 font-sans antialiased">
+    <noscript>You need to enable JavaScript to run QuickFix Grocery.</noscript>
+    <div id="root"></div>
+  </body>
+</html>
