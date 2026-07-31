@@ -1,5 +1,14 @@
 const supabase = require('../lib/supabaseClient');
 
+const PRODUCT_MAPPING = {
+  'APPLE-FUJI-01': 'a0000000-0000-0000-0000-000000000001',
+  'MILK-GAL-02': 'a0000000-0000-0000-0000-000000000002',
+  'BANANA-ORG-03': 'a0000000-0000-0000-0000-000000000003',
+  'BREAD-WW-04': 'a0000000-0000-0000-0000-000000000004',
+  'CEREAL-BOX-05': 'a0000000-0000-0000-0000-000000000005',
+  'EGGS-DOZ-06': 'a0000000-0000-0000-0000-000000000006'
+};
+
 // Regex to validate standard UUIDs
 const isValidUUID = (id) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
@@ -43,10 +52,10 @@ exports.createCustomerOrder = async (req, res) => {
   // Verify items payload content
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
-    if (!item.item_id || item.qty_requested === undefined || !item.sub_rules || item.item_price === undefined) {
+    if (!item.item_id || item.qty_requested === undefined || !item.sub_rules) {
       return res.status(400).json({
         error: 'Bad Request',
-        message: `Item at index ${i} is missing required fields (item_id, qty_requested, sub_rules, item_price).`
+        message: `Item at index ${i} is missing required fields (item_id, qty_requested, sub_rules).`
       });
     }
 
@@ -55,14 +64,6 @@ exports.createCustomerOrder = async (req, res) => {
       return res.status(400).json({
         error: 'Bad Request',
         message: `Item at index ${i} has invalid qty_requested. Must be a positive integer.`
-      });
-    }
-
-    const price = parseFloat(item.item_price);
-    if (isNaN(price) || price < 0) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: `Item at index ${i} has invalid item_price. Must be a non-negative number.`
       });
     }
   }
@@ -97,10 +98,9 @@ exports.createCustomerOrder = async (req, res) => {
     // Step 2 - Format Items: Inject generated order_id into every item
     const formattedItems = items.map(item => ({
       order_id: orderId,
-      item_id: item.item_id,
+      item_id: PRODUCT_MAPPING[item.item_id] || item.item_id,
       qty_requested: parseInt(item.qty_requested, 10),
-      sub_rules: item.sub_rules,
-      item_price: parseFloat(item.item_price)
+      sub_rules: item.sub_rules
     }));
 
     // Step 3 - Bulk Insert Items: Single bulk insert into item_table
@@ -125,7 +125,7 @@ exports.createCustomerOrder = async (req, res) => {
       if (itemsError.code === '23514') {
         return res.status(422).json({
           error: 'Unprocessable Entity',
-          message: `Constraint violation. Check if sub_rules is valid ('auto', 'skip', 'ask'). Details: ${itemsError.message}`
+          message: `Constraint validation failure. Details: ${itemsError.message}`
         });
       }
 
@@ -157,9 +157,9 @@ exports.createCustomerOrder = async (req, res) => {
 exports.getStores = async (req, res) => {
   try {
     const { data, error } = await supabase
-      .from('store_table')
+      .from('stores')
       .select('*')
-      .order('store_name', { ascending: true });
+      .order('name', { ascending: true });
 
     if (error) {
       console.error('Supabase getStores Error:', error);
@@ -169,7 +169,14 @@ exports.getStores = async (req, res) => {
       });
     }
 
-    return res.status(200).json(data);
+    // Map properties for UI backwards compatibility
+    const mapped = data.map(s => ({
+      store_id: s.id,
+      store_name: s.name,
+      created_at: s.created_at
+    }));
+
+    return res.status(200).json(mapped);
   } catch (err) {
     console.error('Unexpected getStores Error:', err);
     return res.status(500).json({

@@ -1,4 +1,22 @@
-const supabase = require('../lib/supabaseClient'); // Adjust path to your supabaseClient.js
+const supabase = require('../lib/supabaseClient');
+
+const PRODUCT_MAPPING = {
+  'APPLE-FUJI-01': 'a0000000-0000-0000-0000-000000000001',
+  'MILK-GAL-02': 'a0000000-0000-0000-0000-000000000002',
+  'BANANA-ORG-03': 'a0000000-0000-0000-0000-000000000003',
+  'BREAD-WW-04': 'a0000000-0000-0000-0000-000000000004',
+  'CEREAL-BOX-05': 'a0000000-0000-0000-0000-000000000005',
+  'EGGS-DOZ-06': 'a0000000-0000-0000-0000-000000000006'
+};
+
+const INVERSE_PRODUCT_MAPPING = {
+  'a0000000-0000-0000-0000-000000000001': 'APPLE-FUJI-01',
+  'a0000000-0000-0000-0000-000000000002': 'MILK-GAL-02',
+  'a0000000-0000-0000-0000-000000000003': 'BANANA-ORG-03',
+  'a0000000-0000-0000-0000-000000000004': 'BREAD-WW-04',
+  'a0000000-0000-0000-0000-000000000005': 'CEREAL-BOX-05',
+  'a0000000-0000-0000-0000-000000000006': 'EGGS-DOZ-06'
+};
 
 // Regex to validate standard UUIDs
 const isValidUUID = (id) =>
@@ -7,7 +25,6 @@ const isValidUUID = (id) =>
 const getOrderForPicker = async (req, res) => {
   const { order_id } = req.params;
 
-  // TEST CASE 2: Catch badly formatted IDs before hitting the database
   if (!order_id || !isValidUUID(order_id)) {
     return res.status(400).json({
       error: 'Bad Request',
@@ -23,7 +40,7 @@ const getOrderForPicker = async (req, res) => {
         order_status,
         order_date,
         items:item_table (
-          list_id,
+          list,
           item_id,
           qty_requested,
           sub_rules,
@@ -34,9 +51,7 @@ const getOrderForPicker = async (req, res) => {
       .eq('order_id', order_id)
       .single();
 
-    // Handle Supabase errors
     if (error) {
-      // TEST CASE 3: Catch 0 rows returned
       if (error.code === 'PGRST116') {
         return res.status(404).json({
           error: 'Not Found',
@@ -44,7 +59,6 @@ const getOrderForPicker = async (req, res) => {
         });
       }
 
-      // TEST CASE 4: Catch general database failures
       console.error('Supabase Query Error:', error);
       return res.status(500).json({
         error: 'Internal Server Error',
@@ -52,7 +66,19 @@ const getOrderForPicker = async (req, res) => {
       });
     }
 
-    // TEST CASE 1: Happy Path
+    // Map UUIDs back to frontend product codes and list back to list_id
+    if (data && data.items) {
+      data.items = data.items.map(item => {
+        const { list, ...rest } = item;
+        return {
+          list_id: list,
+          ...rest,
+          item_id: INVERSE_PRODUCT_MAPPING[item.item_id] || item.item_id,
+          replacement_item_id: INVERSE_PRODUCT_MAPPING[item.replacement_item_id] || item.replacement_item_id || null
+        };
+      });
+    }
+
     return res.status(200).json(data);
 
   } catch (err) {
@@ -76,7 +102,6 @@ const updateItemStatus = async (req, res) => {
   const { list_id } = req.params;
   const { status, replacement_item_id } = req.body;
 
-  // 1. Validate the UUID
   if (!list_id || !isValidUUID(list_id)) {
     return res.status(400).json({
       error: 'Bad Request',
@@ -84,41 +109,38 @@ const updateItemStatus = async (req, res) => {
     });
   }
 
-  // 2. Validate the status
-  const validStatuses = ['pending', 'found', 'not_found', 'replaced', 'awaiting_customer'];
-  if (!status || !validStatuses.includes(status)) {
+  const validStatuses = ['found', 'not_found', 'replaced', 'awaiting_customer'];
+  if (!status || !validStatuses.includes(status.toLowerCase())) {
     return res.status(400).json({
       error: 'Bad Request',
       message: `Invalid status. Must be one of: ${validStatuses.join(', ')}`
     });
   }
 
-  // 3. Business Logic: Require replacement ID if status is 'replaced'
-  if (status === 'replaced' && !replacement_item_id) {
-    return res.status(400).json({
-      error: 'Bad Request',
-      message: 'replacement_item_id is required when status is "replaced".'
-    });
-  }
+  const normalizedStatus = status.toLowerCase();
+
+  // Map to DB status representation (lowercase status constraint)
+  const dbStatusMap = {
+    found: 'found',
+    not_found: 'not_found',
+    replaced: 'replaced',
+    awaiting_customer: 'awaiting_customer'
+  };
 
   try {
-    // 4. Prepare the payload
-    const updatePayload = {
-      status,
-      // If the status is NOT 'replaced', clear out any existing replacement_item_id
-      replacement_item_id: status === 'replaced' ? replacement_item_id : null
-    };
+    const dbReplacementId = replacement_item_id ? (PRODUCT_MAPPING[replacement_item_id] || replacement_item_id) : null;
 
-    // 5. Execute the update in Supabase
     const { data, error } = await supabase
       .from('item_table')
-      .update(updatePayload)
-      .eq('list_id', list_id)
-      .select() // Return the updated row
+      .update({
+        status: dbStatusMap[normalizedStatus],
+        replacement_item_id: (normalizedStatus === 'replaced' || normalizedStatus === 'awaiting_customer') ? dbReplacementId : null
+      })
+      .eq('list', list_id)
+      .select()
       .single();
 
     if (error) {
-      // Handle the '0 rows returned' error if list_id doesn't exist
       if (error.code === 'PGRST116') {
         return res.status(404).json({
           error: 'Not Found',
@@ -149,7 +171,6 @@ const updateItemStatus = async (req, res) => {
 const completeOrder = async (req, res) => {
   const { order_id } = req.params;
 
-  // 1. Validate UUID format
   if (!order_id || !isValidUUID(order_id)) {
     return res.status(400).json({
       error: 'Bad Request',
@@ -158,7 +179,6 @@ const completeOrder = async (req, res) => {
   }
 
   try {
-    // 2. Retrieve order to ensure it exists
     const { data: order, error: orderError } = await supabase
       .from('order_table')
       .select('order_id, order_status')
@@ -179,10 +199,9 @@ const completeOrder = async (req, res) => {
       });
     }
 
-    // 3. Query all items for this order
     const { data: items, error: itemsError } = await supabase
       .from('item_table')
-      .select('list_id, item_id, status')
+      .select('list, item_id, status')
       .eq('order_id', order_id);
 
     if (itemsError) {
@@ -193,8 +212,12 @@ const completeOrder = async (req, res) => {
       });
     }
 
-    // 4. Check if any items are pending or awaiting customer response
-    const incompleteItems = items.filter(item => item.status === 'pending' || item.status === 'awaiting_customer');
+    // Check if any items are pending or awaiting customer response
+    const incompleteItems = items.filter(item => {
+      const s = String(item.status).toLowerCase();
+      return s === 'pending' || s === 'awaiting_customer';
+    });
+
     if (incompleteItems.length > 0) {
       return res.status(400).json({
         error: 'Bad Request',
@@ -203,10 +226,9 @@ const completeOrder = async (req, res) => {
       });
     }
 
-    // 5. Update order_status to 'picked'
     const { data: updatedOrder, error: updateError } = await supabase
       .from('order_table')
-      .update({ order_status: 'picked' })
+      .update({ order_status: 'FINALIZED' })
       .eq('order_id', order_id)
       .select()
       .single();

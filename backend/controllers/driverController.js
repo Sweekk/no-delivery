@@ -20,7 +20,7 @@ const getReadyOrders = async (req, res) => {
           store_name
         )
       `)
-      .eq('order_status', 'picked')
+      .eq('order_status', 'FINALIZED')
       .order('order_date', { ascending: true });
 
     if (error) {
@@ -75,18 +75,18 @@ const deliverOrder = async (req, res) => {
       });
     }
 
-    // 3. Constraint Check: Only update if current status is exactly 'picked'
-    if (order.order_status !== 'picked') {
+    // 3. Constraint Check: Only update if current status is exactly 'FINALIZED' or 'ASSIGNED'
+    if (order.order_status !== 'FINALIZED' && order.order_status !== 'ASSIGNED') {
       return res.status(404).json({
         error: 'Conflict',
-        message: `Order cannot be delivered. Status lifecycle restriction: current status is '${order.order_status}' but must be 'picked'.`
+        message: `Order cannot be delivered. Status lifecycle restriction: current status is '${order.order_status}' but must be 'FINALIZED' or 'ASSIGNED'.`
       });
     }
 
-    // 4. Update the status to 'delivered'
+    // 4. Update the status to 'DELIVERED'
     const { data: updatedOrder, error: updateError } = await supabase
       .from('order_table')
-      .update({ order_status: 'delivered' })
+      .update({ order_status: 'DELIVERED' })
       .eq('order_id', order_id)
       .select()
       .single();

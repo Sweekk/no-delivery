@@ -284,7 +284,7 @@ export default function ReviewSubstitutesModal() {
                         </span>
                       </div>
                       <div className="text-xs text-slate-500 space-y-0.5">
-                        <p>Quantity requested: {item.qty_requested} &bull; Price: ${item.item_price.toFixed(2)}</p>
+                        <p>Quantity requested: {item.qty_requested} &bull; Price: ${(item.item_price || 0).toFixed(2)}</p>
                         {item.replacement_item_id && (
                           <p className="text-indigo-400">Replaced with: {getProductName(item.replacement_item_id)}</p>
                         )}

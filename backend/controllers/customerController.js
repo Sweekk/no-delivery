@@ -1,5 +1,23 @@
 const supabase = require('../lib/supabaseClient');
 
+const PRODUCT_MAPPING = {
+  'APPLE-FUJI-01': 'a0000000-0000-0000-0000-000000000001',
+  'MILK-GAL-02': 'a0000000-0000-0000-0000-000000000002',
+  'BANANA-ORG-03': 'a0000000-0000-0000-0000-000000000003',
+  'BREAD-WW-04': 'a0000000-0000-0000-0000-000000000004',
+  'CEREAL-BOX-05': 'a0000000-0000-0000-0000-000000000005',
+  'EGGS-DOZ-06': 'a0000000-0000-0000-0000-000000000006'
+};
+
+const INVERSE_PRODUCT_MAPPING = {
+  'a0000000-0000-0000-0000-000000000001': 'APPLE-FUJI-01',
+  'a0000000-0000-0000-0000-000000000002': 'MILK-GAL-02',
+  'a0000000-0000-0000-0000-000000000003': 'BANANA-ORG-03',
+  'a0000000-0000-0000-0000-000000000004': 'BREAD-WW-04',
+  'a0000000-0000-0000-0000-000000000005': 'CEREAL-BOX-05',
+  'a0000000-0000-0000-0000-000000000006': 'EGGS-DOZ-06'
+};
+
 // PATCH: Customer resolves an 'ask' sub-rule
 const resolveItemAction = async (req, res) => {
   const { list_id } = req.params;
@@ -23,7 +41,7 @@ const resolveItemAction = async (req, res) => {
   try {
     // 2. Determine the new database values based on the customer's choice
     const newStatus = action === 'skip' ? 'not_found' : 'replaced';
-    const newReplacementId = action === 'skip' ? null : replacement_item_id;
+    const newReplacementId = action === 'skip' ? null : (PRODUCT_MAPPING[replacement_item_id] || replacement_item_id);
 
     // 3. Update the database, ensuring we ONLY update items waiting on the customer
     const { data, error } = await supabase
@@ -32,7 +50,7 @@ const resolveItemAction = async (req, res) => {
         status: newStatus, 
         replacement_item_id: newReplacementId 
       })
-      .eq('list_id', list_id)
+      .eq('list', list_id)
       .eq('status', 'awaiting_customer') // Security: Prevent updating already picked items
       .select()
       .single();
@@ -70,13 +88,12 @@ const getOrderStatus = async (req, res) => {
         order_status,
         order_date,
         items:item_table (
-          list_id,
+          list,
           item_id,
           qty_requested,
           sub_rules,
           status,
-          replacement_item_id,
-          item_price
+          replacement_item_id
         )
       `)
       .eq('order_id', order_id)
@@ -93,6 +110,19 @@ const getOrderStatus = async (req, res) => {
       return res.status(500).json({
         error: 'Internal Server Error',
         message: 'Failed to retrieve order status.'
+      });
+    }
+
+    // Map UUIDs back to frontend product codes and list back to list_id
+    if (data && data.items) {
+      data.items = data.items.map(item => {
+        const { list, ...rest } = item;
+        return {
+          list_id: list,
+          ...rest,
+          item_id: INVERSE_PRODUCT_MAPPING[item.item_id] || item.item_id,
+          replacement_item_id: INVERSE_PRODUCT_MAPPING[item.replacement_item_id] || item.replacement_item_id || null
+        };
       });
     }
 
