@@ -1,4 +1,5 @@
 import React from 'react';
+<<<<<<< HEAD
 import Navbar from '../components/common/Navbar';
 import Dashboard from '../components/admin/Dashboard';
 
@@ -15,4 +16,10 @@ export default function AdminDashboard({ onNavigate }) {
       </main>
     </div>
   );
+=======
+import { AdminDashboard as DashboardView } from './admin/Dashboard.jsx';
+
+export default function AdminDashboard(props) {
+  return <DashboardView {...props} />;
+>>>>>>> customer
 }

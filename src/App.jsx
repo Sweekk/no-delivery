@@ -120,6 +120,62 @@ function MainAppContent() {
     if (loggedInUser.role === 'admin') {
       return <AdminDashboard onLogout={handleLogout} />;
     }
+
+    if (loggedInUser.role === 'delivery') {
+      return (
+        <div className="min-h-screen bg-slate-50 flex flex-col justify-between font-sans">
+          <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between shadow-xs">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 font-bold flex items-center justify-center">
+                🚚
+              </div>
+              <div>
+                <h1 className="font-extrabold text-slate-900 text-base">Delivery Partner Portal</h1>
+                <p className="text-xs text-slate-500">Welcome, {loggedInUser.name}</p>
+              </div>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition cursor-pointer"
+            >
+              Log Out
+            </button>
+          </header>
+          <main className="flex-1 flex flex-col items-center justify-center p-6 text-center max-w-md mx-auto">
+            <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-3xl flex items-center justify-center text-3xl mb-4 shadow-inner">
+              📍
+            </div>
+            <h2 className="text-xl font-bold text-slate-900 mb-2">Delivery Partner Dashboard</h2>
+            <p className="text-sm text-slate-600 mb-6 leading-relaxed">
+              Welcome to the FreshBasket Delivery Fleet Portal. You are logged in as <strong className="text-slate-900">{loggedInUser.email}</strong>.
+            </p>
+            <div className="w-full bg-white p-4 rounded-2xl border border-slate-200 text-left text-xs space-y-2 mb-6 shadow-xs">
+              <div className="flex justify-between py-1 border-b border-slate-100">
+                <span className="text-slate-500">Assigned Hub</span>
+                <span className="font-bold text-slate-800">Central Metro Store #402</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-100">
+                <span className="text-slate-500">Fleet Status</span>
+                <span className="font-bold text-emerald-600">● Active & Ready</span>
+              </div>
+              <div className="flex justify-between py-1">
+                <span className="text-slate-500">App Scope</span>
+                <span className="font-bold text-slate-800">Delivery Mobile Interface</span>
+              </div>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl shadow-md transition cursor-pointer"
+            >
+              Sign Out to Role Selection
+            </button>
+          </main>
+          <footer className="py-4 text-center text-xs text-slate-400 border-t border-slate-200 bg-white">
+            FreshBasket Fleet &bull; Delivery Partner Console
+          </footer>
+        </div>
+      );
+    }
   }
 
   // LOGIN PAGE (WHITE BACKGROUND BASE THEME & GROCERY BRANDING)

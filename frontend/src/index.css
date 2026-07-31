@@ -1,5 +1,6 @@
 @import "tailwindcss";
 
+<<<<<<< HEAD
 /* ─── Base resets for the delivery partner app ─── */
 *,
 *::before,
@@ -34,3 +35,42 @@ h1, h2, h3, h4, h5, h6 {
 p {
   margin: 0;
 }
+=======
+@theme {
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  --color-emerald-500: #10B981;
+  --color-emerald-600: #059669;
+  --color-emerald-700: #047857;
+}
+
+@layer base {
+  html {
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    color: #0F172A;
+    background-color: #ffffff;
+  }
+
+  body {
+    background-color: #ffffff;
+    min-height: 100vh;
+    color: #0F172A;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+>>>>>>> customer

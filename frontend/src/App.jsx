@@ -1,135 +1,344 @@
-import React, { useState, useEffect } from 'react';
-import CustomerCheckout from './pages/CustomerCheckout';
-import PickerRun from './pages/PickerRun';
-import AdminDashboard from './pages/AdminDashboard';
-import DeliveryPartnerLogin from './pages/DeliveryPartnerLogin';
-import DeliveryPartnerDashboard from './pages/DeliveryPartnerDashboard';
-import DeliveryPartnerOrders from './pages/DeliveryPartnerOrders';
-import DeliveryPartnerProfile from './pages/DeliveryPartnerProfile';
-import ReportIssue from './pages/ReportIssue';
-import Header from './components/common/Header';
+import React, { useState } from 'react';
+import {
+  Eye,
+  EyeOff,
+  Lock,
+  Mail,
+  ArrowRight,
+  RefreshCw,
+  ShoppingBasket,
+} from 'lucide-react';
 
-// ProtectedRoute component ensures partner authentication
-function ProtectedRoute({ partner, onLoginSuccess, children }) {
-  if (!partner) {
-    return <DeliveryPartnerLogin onLoginSuccess={onLoginSuccess} />;
+import { ROLES } from './data/roles.js';
+import { Logo } from './components/common/Logo.jsx';
+import { Toast } from './components/common/Toast.jsx';
+import { RoleSelector } from './components/auth/RoleSelector.jsx';
+import { ForgotPasswordModal } from './components/auth/ForgotPasswordModal.jsx';
+import { CreateAccountModal } from './components/auth/CreateAccountModal.jsx';
+import { TermsModal } from './components/auth/TermsModal.jsx';
+
+// Multi-Role Pages
+import { AuthProvider, useAuth } from './context/AuthContext.jsx';
+import { OrderProvider } from './context/OrderContext.jsx';
+import { Home as CustomerHome } from './pages/customer/Home.jsx';
+import { PickerQueue } from './pages/picker/PickerQueue.jsx';
+import { AdminDashboard } from './pages/admin/Dashboard.jsx';
+import { DeliveryPortal } from './pages/delivery/DeliveryPortal.jsx';
+
+function MainAppContent() {
+  const {
+    currentUser,
+    selectedRole,
+    setSelectedRole,
+    login,
+    logout,
+    isLoading: isAuthLoading,
+    fillDemoCredentials,
+  } = useAuth();
+
+  const [emailOrUsername, setEmailOrUsername] = useState('alex.customer@quickfix.com');
+  const [password, setPassword] = useState('Password123!');
+  const [showPassword, setShowPassword] = useState(false);
+
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [toast, setToast] = useState(null);
+
+  const [isForgotModalOpen, setIsForgotModalOpen] = useState(false);
+  const [isCreateAccountOpen, setIsCreateAccountOpen] = useState(false);
+  const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
+
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => {
+      setToast(null);
+    }, 3500);
+  };
+
+  const handleRoleChange = (role) => {
+    setSelectedRole(role);
+    setErrorMessage('');
+    const demo = fillDemoCredentials(role);
+    setEmailOrUsername(demo.email);
+    setPassword(demo.pass);
+    const config = ROLES.find((r) => r.id === role);
+    if (config) {
+      showToast(`Switched role to ${config.label}. Demo credentials auto-filled.`, 'success');
+    }
+  };
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setErrorMessage('');
+
+    if (!emailOrUsername.trim()) {
+      setErrorMessage('Please enter your email or username.');
+      return;
+    }
+
+    if (!password) {
+      setErrorMessage('Please enter your password.');
+      return;
+    }
+
+    setIsLoading(true);
+    const result = await login(emailOrUsername, password, selectedRole);
+    setIsLoading(false);
+
+    if (!result.success) {
+      setErrorMessage(
+        result.errors?.general ||
+        result.errors?.role ||
+        result.errors?.email ||
+        result.errors?.password ||
+        'Login failed. Please check your credentials.'
+      );
+    }
+  };
+
+  const activeRoleConfig = ROLES.find((r) => r.id === selectedRole) || ROLES[0];
+
+  // LOGGED IN VIEW
+  if (currentUser) {
+    if (currentUser.role === 'customer') {
+      return (
+        <CustomerHome
+          userName={currentUser.name}
+          userEmail={currentUser.email}
+          userRole={activeRoleConfig.label}
+          onLogout={logout}
+        />
+      );
+    }
+
+    if (currentUser.role === 'picker') {
+      return <PickerQueue onLogout={logout} />;
+    }
+
+    if (currentUser.role === 'admin') {
+      return <AdminDashboard onLogout={logout} />;
+    }
+
+    if (currentUser.role === 'delivery') {
+      return <DeliveryPortal onLogout={logout} />;
+    }
   }
-  return children;
-}
 
-export default function App() {
-  const [currentRoute, setCurrentRoute] = useState('delivery-dashboard');
-  const [partner, setPartner] = useState(null);
 
-  // Sync hash routing with window location
-  useEffect(() => {
-    const handleHashChange = () => {
-      const hash = window.location.hash.replace('#', '');
-      if (hash) {
-        setCurrentRoute(hash);
-      }
-    };
-    window.addEventListener('hashchange', handleHashChange);
-    if (window.location.hash) {
-      handleHashChange();
-    }
-    return () => window.removeEventListener('hashchange', handleHashChange);
-  }, []);
-
-  const navigateTo = (route) => {
-    setCurrentRoute(route);
-    window.location.hash = route;
-  };
-
-  const handleLoginSuccess = (partnerData) => {
-    setPartner(
-      partnerData || { email: 'partner@quickfixgrocery.com', name: 'Partner #402', zone: 'Central Metro Zone' }
-    );
-    navigateTo('delivery-dashboard');
-  };
-
-  const handleLogout = () => {
-    setPartner(null);
-    navigateTo('delivery-login');
-  };
-
-  const renderCurrentView = () => {
-    switch (currentRoute) {
-      case 'checkout':
-        return <CustomerCheckout onNavigate={navigateTo} />;
-      case 'picker':
-        return <PickerRun onNavigate={navigateTo} />;
-      case 'admin':
-        return <AdminDashboard onNavigate={navigateTo} />;
-      case 'delivery-login':
-        return <DeliveryPartnerLogin onLoginSuccess={handleLoginSuccess} onNavigate={navigateTo} />;
-      case 'delivery-orders':
-        return (
-          <ProtectedRoute partner={partner} onLoginSuccess={handleLoginSuccess}>
-            <DeliveryPartnerOrders onNavigate={navigateTo} onLogout={handleLogout} />
-          </ProtectedRoute>
-        );
-      case 'delivery-profile':
-        return (
-          <ProtectedRoute partner={partner} onLoginSuccess={handleLoginSuccess}>
-            <DeliveryPartnerProfile onNavigate={navigateTo} onLogout={handleLogout} />
-          </ProtectedRoute>
-        );
-      case 'report-issue':
-        return (
-          <ProtectedRoute partner={partner} onLoginSuccess={handleLoginSuccess}>
-            <ReportIssue onNavigate={navigateTo} onLogout={handleLogout} />
-          </ProtectedRoute>
-        );
-      case 'delivery-dashboard':
-      default:
-        return (
-          <ProtectedRoute partner={partner} onLoginSuccess={handleLoginSuccess}>
-            <DeliveryPartnerDashboard onNavigate={navigateTo} onLogout={handleLogout} />
-          </ProtectedRoute>
-        );
-    }
-  };
-
+  // LOGIN PAGE
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900 font-sans selection:bg-emerald-100 selection:text-emerald-800">
-      {/* Dev‑only module switcher bar */}
-      {(currentRoute === 'checkout' || currentRoute === 'picker' || currentRoute === 'admin') && (
-        <div className="bg-gray-900 text-white text-xs px-4 py-2 flex flex-wrap items-center justify-between gap-2 shadow-inner">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-            <span className="font-black tracking-wide">QuickFix Grocery Platform</span>
-            <span className="text-gray-400">| Demo Modules Router</span>
-          </div>
-          <div className="flex items-center gap-2 overflow-x-auto text-[11px]">
-            <button onClick={() => navigateTo('delivery-dashboard')} className="px-2.5 py-1 rounded bg-emerald-600 font-bold text-white">
-              Delivery Partner Portal
-            </button>
+    <div className="min-h-screen w-full flex flex-col justify-between bg-white text-slate-900 font-sans">
+      <Toast message={toast?.message || null} type={toast?.type} />
+
+      <ForgotPasswordModal
+        isOpen={isForgotModalOpen}
+        onClose={() => setIsForgotModalOpen(false)}
+      />
+      <CreateAccountModal
+        isOpen={isCreateAccountOpen}
+        onClose={() => setIsCreateAccountOpen(false)}
+        onSuccess={(role, email) => {
+          setSelectedRole(role);
+          showToast(`Account created! Welcome to FreshBasket Grocery.`, 'success');
+        }}
+      />
+      <TermsModal
+        isOpen={isTermsModalOpen}
+        onClose={() => setIsTermsModalOpen(false)}
+      />
+
+      {/* Header */}
+      <header className="w-full bg-white border-b border-slate-200 sticky top-0 z-30">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
+          <Logo showTagline={false} />
+
+          <div className="flex items-center gap-3">
+            <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+              <ShoppingBasket className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Online Grocery Shopping App</span>
+            </span>
+
             <button
-              onClick={() => navigateTo('checkout')}
-              className={`px-2.5 py-1 rounded transition-colors ${currentRoute === 'checkout' ? 'bg-emerald-600 font-bold text-white' : 'text-gray-300 hover:text-white'}`}
+              onClick={() => setIsTermsModalOpen(true)}
+              className="text-xs font-semibold text-slate-600 hover:text-slate-900 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition cursor-pointer"
             >
-              Customer Checkout
-            </button>
-            <button
-              onClick={() => navigateTo('picker')}
-              className={`px-2.5 py-1 rounded transition-colors ${currentRoute === 'picker' ? 'bg-emerald-600 font-bold text-white' : 'text-gray-300 hover:text-white'}`}
-            >
-              Picker Interface
-            </button>
-            <button
-              onClick={() => navigateTo('admin')}
-              className={`px-2.5 py-1 rounded transition-colors ${currentRoute === 'admin' ? 'bg-emerald-600 font-bold text-white' : 'text-gray-300 hover:text-white'}`}
-            >
-              Admin Dashboard
+              Grocery Substitution Policy
             </button>
           </div>
         </div>
-      )}
-      {/* Header */}
-      <Header onViewChange={navigateTo} currentView={currentRoute} />
-      {/* Main App Container */}
-      {renderCurrentView()}
+      </header>
+
+      {/* Main Login Area */}
+      <main className="flex-1 flex items-center justify-center px-4 py-8 sm:py-12 bg-white">
+        <div className="w-full max-w-xl mx-auto space-y-6">
+
+          {/* Grocery Branding Banner */}
+          <div className="bg-emerald-50/80 rounded-3xl p-6 border border-emerald-100 text-center space-y-3">
+            <div className="w-14 h-14 rounded-2xl bg-white border border-emerald-200 flex items-center justify-center mx-auto text-emerald-600 shadow-xs">
+              <ShoppingBasket className="w-8 h-8" />
+            </div>
+            <div className="space-y-1 text-center">
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+                FreshBasket Grocery Shopping App
+              </h1>
+              <p className="text-xs sm:text-sm text-slate-600 font-medium max-w-md mx-auto">
+                Customer Frontend Portal & Item Substitution Management System
+              </p>
+            </div>
+          </div>
+
+          {/* Login Form Container */}
+          <div className="bg-white rounded-3xl p-6 sm:p-10 border border-slate-200 shadow-xs space-y-6">
+
+            {/* Role Selection Tabs (3 Roles: Customer, Picker, Admin) */}
+            <div className="space-y-2.5">
+              <RoleSelector
+                selectedRole={selectedRole}
+                onSelectRole={handleRoleChange}
+                disabled={isLoading || isAuthLoading}
+              />
+
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs text-slate-700 font-medium">
+                <span>Selected Login Role:</span>
+                <span className="font-bold text-emerald-800">{activeRoleConfig.badge}</span>
+              </div>
+            </div>
+
+            {/* Login Form */}
+            <form onSubmit={handleLogin} className="space-y-4 text-left">
+              {errorMessage && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold">
+                  {errorMessage}
+                </div>
+              )}
+
+              {/* Email / Username Input */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
+                  Email or Username <span className="text-emerald-600">*</span>
+                </label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5 pointer-events-none" />
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. alex.customer@quickfix.com"
+                    value={emailOrUsername}
+                    onChange={(e) => setEmailOrUsername(e.target.value)}
+                    disabled={isLoading || isAuthLoading}
+                    className="w-full pl-10 pr-4 py-3 rounded-xl bg-white border border-slate-300 text-slate-900 text-sm placeholder-slate-400 focus:outline-none focus:border-emerald-500 font-medium"
+                  />
+                </div>
+              </div>
+
+              {/* Password Input */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Password <span className="text-emerald-600">*</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setIsForgotModalOpen(true)}
+                    className="text-xs font-bold text-emerald-700 hover:underline cursor-pointer"
+                  >
+                    Forgot Password?
+                  </button>
+                </div>
+
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5 pointer-events-none" />
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    placeholder="Enter password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    disabled={isLoading || isAuthLoading}
+                    className="w-full pl-10 pr-11 py-3 rounded-xl bg-white border border-slate-300 text-slate-900 text-sm placeholder-slate-400 focus:outline-none focus:border-emerald-500 font-medium"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3.5 top-3 text-slate-400 hover:text-slate-700 cursor-pointer"
+                    title={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Auto-fill button */}
+              <div className="flex items-center justify-between pt-1 text-xs">
+                <span className="text-slate-500 font-medium">Academic Project Demo Mode</span>
+
+                <button
+                  type="button"
+                  onClick={() => handleRoleChange(selectedRole)}
+                  className="font-bold text-slate-600 hover:text-emerald-700 flex items-center gap-1 cursor-pointer"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" /> Auto-fill Demo Credentials
+                </button>
+              </div>
+
+              {/* Submit Button */}
+              <button
+                type="submit"
+                disabled={isLoading || isAuthLoading}
+                className="w-full py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm tracking-wide flex items-center justify-center gap-2 transition cursor-pointer shadow-xs"
+              >
+                {isLoading || isAuthLoading ? (
+                  <span>Logging in...</span>
+                ) : (
+                  <>
+                    <span>Log In as {activeRoleConfig.label}</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+            </form>
+
+            {/* Create Account Link */}
+            <div className="pt-4 border-t border-slate-100 flex items-center justify-between text-xs">
+              <span className="text-slate-600 font-medium">Need a new customer account?</span>
+              <button
+                type="button"
+                onClick={() => setIsCreateAccountOpen(true)}
+                className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-emerald-800 font-bold transition cursor-pointer"
+              >
+                Create Account
+              </button>
+            </div>
+
+          </div>
+        </div>
+      </main>
+
+      {/* Footer */}
+      <footer className="w-full bg-white border-t border-slate-200 py-4 px-4 text-center text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-2 max-w-6xl mx-auto">
+        <div className="font-medium">
+          © 2026 FreshBasket Grocery Shopping App. Student Academic Project.
+        </div>
+        <div className="flex items-center gap-4 text-slate-600 font-medium">
+          <button onClick={() => setIsTermsModalOpen(true)} className="hover:text-emerald-700 transition cursor-pointer">
+            Substitution Rules
+          </button>
+          <span>•</span>
+          <button onClick={() => setIsTermsModalOpen(true)} className="hover:text-emerald-700 transition cursor-pointer">
+            Terms
+          </button>
+        </div>
+      </footer>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <OrderProvider>
+        <MainAppContent />
+      </OrderProvider>
+    </AuthProvider>
   );
 }

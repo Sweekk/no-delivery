@@ -29,4 +29,14 @@ export const ROLES = [
     demoPassword: 'AdminPassword123!',
     color: 'purple',
   },
+  {
+    id: 'delivery',
+    label: 'Delivery Person',
+    iconName: 'Truck',
+    badge: '🚚 Delivery Partner',
+    description: 'Fulfill customer orders, navigate store pickups, and complete doorstep deliveries.',
+    demoEmail: 'delivery.partner@quickfix.com',
+    demoPassword: 'PartnerPassword123!',
+    color: 'blue',
+  },
 ];

@@ -1,10 +1,6 @@
 import React from 'react';
+import { Cart } from '../../pages/customer/Cart.jsx';
 
-export default function CartUI() {
-  return (
-    <div className="p-4 border rounded shadow-sm">
-      <h2 className="text-xl font-bold">Customer Cart</h2>
-      <p className="text-gray-600">Cart items layout structure.</p>
-    </div>
-  );
+export default function CartUI(props) {
+  return <Cart {...props} />;
 }
