@@ -57,7 +57,7 @@ export default function CustomerCheckout() {
     let isMounted = true;
     async function pollOrder() {
       try {
-        const res = await fetch(`/api/customer/order/${selectedOrderId}`);
+        const res = await fetch(`/api/customer/order/${selectedOrderId}/status`);
         if (!res.ok) return;
         const data = await res.json();
         if (isMounted) {
@@ -188,7 +188,7 @@ export default function CustomerCheckout() {
       if (res.ok) {
         showNotification(`Successfully resolved item: ${action === 'skip' ? 'Skipped' : 'Substituted'}`);
         // Manually trigger a refresh of order details
-        const refreshRes = await fetch(`/api/customer/order/${selectedOrderId}`);
+        const refreshRes = await fetch(`/api/customer/order/${selectedOrderId}/status`);
         if (refreshRes.ok) {
           const freshData = await refreshRes.json();
           setActiveOrder(freshData);
@@ -205,7 +205,7 @@ export default function CustomerCheckout() {
     setSelectedOrderId(orderId);
     setLoadingOrder(true);
     try {
-      const res = await fetch(`/api/customer/order/${orderId}`);
+      const res = await fetch(`/api/customer/order/${orderId}/status`);
       if (res.ok) {
         const data = await res.json();
         setActiveOrder(data);
@@ -240,27 +240,6 @@ export default function CustomerCheckout() {
   };
 
   return (
-<<<<<<< HEAD
-    <div className="space-y-8 animate-fade-in font-sans">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold text-slate-100 tracking-tight">Customer Checkout Storefront</h1>
-        <p className="text-slate-400">Configure your shopping cart, select substitution preferences, and submit a customer order directly to the picker database.</p>
-      </div>
-
-      <CartUI />
-
-      <div className="pt-8 border-t border-slate-900">
-        <details className="group bg-slate-900/20 border border-slate-800 rounded-xl overflow-hidden transition-all duration-200">
-          <summary className="flex items-center justify-between p-4 cursor-pointer text-slate-400 hover:text-slate-200 font-medium select-none text-sm">
-            <span>🔧 Additional Customer Modules (Substitutes Review)</span>
-            <span className="text-xs transition-transform group-open:rotate-180">▼</span>
-          </summary>
-          <div className="p-4 border-t border-slate-800 bg-slate-950/20">
-            <ReviewSubstitutesModal />
-          </div>
-        </details>
-      </div>
-=======
     <div className="customer-page">
       {/* Toast Notification */}
       {notification && (
@@ -624,7 +603,6 @@ export default function CustomerCheckout() {
         )}
 
       </section>
->>>>>>> bdev
     </div>
   );
 }

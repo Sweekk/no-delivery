@@ -42,7 +42,7 @@ export default function ReviewSubstitutesModal() {
     const fetchStatus = async (isBackground = false) => {
       if (!isBackground) setLoading(true);
       try {
-        const res = await fetch(`http://localhost:5000/api/customer/order/${trackedOrderId}/status`);
+        const res = await fetch(`/api/customer/order/${trackedOrderId}/status`);
         if (!res.ok) {
           if (res.status === 404) {
             throw new Error(`Order with ID "${trackedOrderId}" not found.`);
@@ -130,7 +130,7 @@ export default function ReviewSubstitutesModal() {
     };
 
     try {
-      const res = await fetch(`http://localhost:5000/api/customer/item/${activeItemToResolve.list_id}/resolve`, {
+      const res = await fetch(`/api/customer/item/${activeItemToResolve.list_id}/resolve`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -145,7 +145,7 @@ export default function ReviewSubstitutesModal() {
       setActiveItemToResolve(null);
       // Background update order details immediately
       if (trackedOrderId) {
-        const statusRes = await fetch(`http://localhost:5000/api/customer/order/${trackedOrderId}/status`);
+        const statusRes = await fetch(`/api/customer/order/${trackedOrderId}/status`);
         if (statusRes.ok) {
           const data = await statusRes.json();
           setOrderDetails(data);

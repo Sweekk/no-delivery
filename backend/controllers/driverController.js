@@ -20,11 +20,7 @@ const getReadyOrders = async (req, res) => {
           store_name
         )
       `)
-<<<<<<< HEAD
-      .eq('order_status', 'FINALIZED')
-=======
-      .eq('order_status', 'picked')
->>>>>>> bdev
+      .in('order_status', ['FINALIZED', 'ASSIGNED', 'picked', 'completed'])
       .order('order_date', { ascending: true });
 
     if (error) {
@@ -79,12 +75,13 @@ const deliverOrder = async (req, res) => {
       });
     }
 
-<<<<<<< HEAD
-    // 3. Constraint Check: Only update if current status is exactly 'FINALIZED' or 'ASSIGNED'
-    if (order.order_status !== 'FINALIZED' && order.order_status !== 'ASSIGNED') {
+    // 3. Constraint Check: Only update if current status is ready for delivery
+    const currentStatus = (order.order_status || '').toUpperCase();
+    const validReadyStatuses = ['FINALIZED', 'ASSIGNED', 'PICKED', 'COMPLETED'];
+    if (!validReadyStatuses.includes(currentStatus)) {
       return res.status(404).json({
         error: 'Conflict',
-        message: `Order cannot be delivered. Status lifecycle restriction: current status is '${order.order_status}' but must be 'FINALIZED' or 'ASSIGNED'.`
+        message: `Order cannot be delivered. Status lifecycle restriction: current status is '${order.order_status}' but must be one of: ${validReadyStatuses.join(', ')}.`
       });
     }
 
@@ -92,20 +89,6 @@ const deliverOrder = async (req, res) => {
     const { data: updatedOrder, error: updateError } = await supabase
       .from('order_table')
       .update({ order_status: 'DELIVERED' })
-=======
-    // 3. Constraint Check: Only update if current status is exactly 'picked'
-    if (order.order_status !== 'picked') {
-      return res.status(404).json({
-        error: 'Conflict',
-        message: `Order cannot be delivered. Status lifecycle restriction: current status is '${order.order_status}' but must be 'picked'.`
-      });
-    }
-
-    // 4. Update the status to 'delivered'
-    const { data: updatedOrder, error: updateError } = await supabase
-      .from('order_table')
-      .update({ order_status: 'delivered' })
->>>>>>> bdev
       .eq('order_id', order_id)
       .select()
       .single();

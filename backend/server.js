@@ -22,12 +22,13 @@ app.use('/order', pickerRoutes);
 app.use('/item', pickerRoutes);
 
 // Additional domain routes
+app.use('/api/customer', require('./routes/customerOrder'));
 app.use('/api/substitution', require('./routes/substitution'));
 app.use('/api/dispatch', require('./routes/dispatch'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/driver', require('./routes/driver'));
 
-const PORT = process.env.PORT || 5001;
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Backend server running on port ${PORT}`);
 });

@@ -22,9 +22,9 @@ export default function ActivePickList({ orderId, onBackToQueue }) {
         const data = await res.json();
 
         if (isMounted) {
-          if (data.success) {
+          if (res.ok && data && (data.order_id || Array.isArray(data.items) || data.success)) {
             setOrder({
-              display_name: data.display_name || 'Grocery order',
+              display_name: data.display_name || data.customer_name || `Order #${orderId.substring(0, 8)}`,
               store_name: data.store_name || 'QuickFIx Grocery Store'
             });
             setItems(data.items || []);
@@ -88,10 +88,10 @@ export default function ActivePickList({ orderId, onBackToQueue }) {
 
       const resData = await response.json();
 
-      if (!response.ok || !resData.success) {
+      if (!response.ok) {
         // Revert state on failure & inform picker
         setItems(prevItems);
-        showToast(`Failed to update item status: ${resData.error || 'Server error'}`);
+        showToast(`Failed to update item status: ${resData.error || resData.message || 'Server error'}`);
       }
     } catch (err) {
       // Revert state on network drop

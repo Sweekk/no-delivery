@@ -24,7 +24,7 @@ export default function CartUI() {
   useEffect(() => {
     const fetchStores = async () => {
       try {
-        const res = await fetch('http://localhost:5000/api/customer/stores');
+        const res = await fetch('/api/customer/stores');
         if (!res.ok) throw new Error('Failed to load stores');
         const data = await res.json();
         setStores(data);
@@ -117,7 +117,7 @@ export default function CartUI() {
     };
 
     try {
-      const res = await fetch('http://localhost:5000/api/customer/order', {
+      const res = await fetch('/api/customer/order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

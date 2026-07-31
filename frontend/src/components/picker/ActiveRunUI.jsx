@@ -26,7 +26,7 @@ export default function ActiveRunUI({ orderId, onBack }) {
     const fetchOrderDetails = async (isBackground = false) => {
       if (!isBackground) setLoading(true);
       try {
-        const res = await fetch(`http://localhost:5000/api/picker/order/${orderId}`, { cache: 'no-store' });
+        const res = await fetch(`/api/picker/order/${orderId}`, { cache: 'no-store' });
         if (!res.ok) throw new Error('Failed to retrieve order items.');
         const data = await res.json();
         setOrder(data);
@@ -69,7 +69,7 @@ export default function ActiveRunUI({ orderId, onBack }) {
 
     // 2. Persist update to DB immediately in the background
     try {
-      const res = await fetch(`http://localhost:5000/api/picker/item/${listId}`, {
+      const res = await fetch(`/api/picker/item/${listId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: statusToSave })
@@ -98,7 +98,7 @@ export default function ActiveRunUI({ orderId, onBack }) {
       }
 
       // Finalize the order picking
-      const completeRes = await fetch(`http://localhost:5000/api/picker/order/${orderId}/complete`, {
+      const completeRes = await fetch(`/api/picker/order/${orderId}/complete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       });
