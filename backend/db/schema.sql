@@ -128,3 +128,19 @@ FROM stores s
 JOIN order_table o ON o.store_id = s.id
 WHERE o.finalized_at IS NOT NULL
 GROUP BY s.id, s.name;
+
+-- =============================================
+-- USERS TABLE
+-- =============================================
+CREATE TABLE IF NOT EXISTS users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  username TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('customer', 'delivery', 'picker', 'admin')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_username ON users (username);
+ALTER TABLE users DISABLE ROW LEVEL SECURITY;
+
+
