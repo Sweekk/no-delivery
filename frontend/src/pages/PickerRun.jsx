@@ -1,13 +1,22 @@
-import React from 'react';
-import ActiveRunUI from '../components/picker/ActiveRunUI';
-import NotFoundButton from '../components/picker/NotFoundButton';
+import React, { useState } from 'react';
+import OrderQueue from '../components/picker/OrderQueue';
+import ActivePickList from '../components/picker/ActivePickList';
 
 export default function PickerRun() {
+  const [activeOrderId, setActiveOrderId] = useState(null);
+
   return (
-    <div className="container mx-auto p-4 space-y-4">
-      <h1 className="text-2xl font-bold">Picker Interface</h1>
-      <ActiveRunUI />
-      <NotFoundButton onClick={() => alert('Item marked not found')} />
+    <div className="picker-page-wrapper">
+      {activeOrderId ? (
+        <ActivePickList
+          orderId={activeOrderId}
+          onBackToQueue={() => setActiveOrderId(null)}
+        />
+      ) : (
+        <OrderQueue
+          onSelectOrder={(orderId) => setActiveOrderId(orderId)}
+        />
+      )}
     </div>
   );
 }

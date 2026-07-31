@@ -1,0 +1,9 @@
+.customer-page { max-width: 760px; margin: 0 auto; color: #1e293b; }
+.customer-page-header { padding: 1.4rem 0 1.2rem; }
+.customer-page-header p { margin: 0 0 0.4rem; color: #0c831f; font-size: 0.75rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+.customer-page-header h1 { margin: 0; font-size: 1.65rem; letter-spacing: -0.03em; }
+.customer-page-header span { display: block; margin-top: 0.45rem; color: #64748b; font-size: 0.92rem; }
+.customer-content { display: grid; gap: 1rem; }
+.customer-content > div { margin: 0; padding: 1.25rem; background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; box-shadow: 0 2px 8px rgba(15, 23, 42, 0.03); }
+.customer-content h2, .customer-content h3 { margin: 0 0 0.4rem; color: #1e293b; }
+.customer-content p { margin: 0; color: #64748b; }

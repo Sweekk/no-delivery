@@ -4,67 +4,68 @@ async function seedDemoData() {
   console.log('--- SEEDING DEMO DATA INTO SUPABASE ---\n');
 
   try {
-    // 1. Create a Finalized Order
-    const { data: order, error: orderErr } = await supabase
-      .from('orders')
-      .insert([
-        {
-          status: 'FINALIZED',
-          total_amount: 49.99,
-        },
-      ])
+    // 1. Create Demo Store
+    const { data: store, error: storeErr } = await supabase
+      .from('stores')
+      .insert([{ name: 'QuickFIx Grocery - Indiranagar' }])
       .select()
       .single();
 
-    if (orderErr) {
-      console.error('Failed to insert demo order:', orderErr.message);
-      return;
+    if (storeErr && !storeErr.message.includes('duplicate')) {
+      console.log('Store creation info:', storeErr.message);
     }
-    console.log('Created Finalized Order UUID:', order.id);
+    const storeId = store?.id;
 
-    // 2. Create resolved Order Items
-    const { error: itemErr } = await supabase.from('order_items').insert([
-      {
-        order_id: order.id,
-        quantity: 2,
-        status: 'picked',
-        resolution_status: 'CONFIRMED',
-      },
-      {
-        order_id: order.id,
-        quantity: 1,
-        status: 'resolved',
-        resolution_status: 'SUBSTITUTED',
-      },
-    ]);
-
-    if (itemErr) {
-      console.error('Failed to insert order items:', itemErr.message);
-      return;
-    }
-    console.log('Created resolved items for Order:', order.id);
-
-    // 3. Create an AVAILABLE Delivery Partner
-    const { data: partner, error: partnerErr } = await supabase
+    // 2. Create Demo Delivery Partners
+    const { data: partners, error: partnerErr } = await supabase
       .from('delivery_partners')
       .insert([
-        {
-          name: 'Ramesh Kumar (Demo Partner)',
-          status: 'AVAILABLE',
-        },
+        { name: 'Ramesh Kumar', status: 'AVAILABLE' },
+        { name: 'Priya Sharma', status: 'BUSY' },
+        { name: 'Arjun Singh', status: 'AVAILABLE' }
       ])
-      .select()
-      .single();
+      .select();
 
     if (partnerErr) {
-      console.error('Failed to insert delivery partner:', partnerErr.message);
-      return;
+      console.log('Partner creation info:', partnerErr.message);
     }
-    console.log('Created Available Delivery Partner:', partner);
+
+    // 3. Create Orders in order_table
+    const { data: orders, error: orderErr } = await supabase
+      .from('order_table')
+      .insert([
+        {
+          order_status: 'FINALIZED',
+          total_amount: 450.50,
+          store_id: storeId,
+          finalized_at: new Date().toISOString()
+        },
+        {
+          order_status: 'PICKING',
+          total_amount: 280.00,
+          store_id: storeId
+        },
+        {
+          order_status: 'AWAITING_SUBSTITUTION',
+          total_amount: 620.75,
+          store_id: storeId
+        },
+        {
+          order_status: 'DELIVERED',
+          total_amount: 199.00,
+          store_id: storeId,
+          finalized_at: new Date(Date.now() - 3600000).toISOString()
+        }
+      ])
+      .select();
+
+    if (orderErr) {
+      console.error('Order creation error:', orderErr.message);
+    } else {
+      console.log(`Inserted ${orders.length} orders successfully into order_table!`);
+    }
 
     console.log('\n--- SEED COMPLETE ---');
-    console.log(`\nNow test curl with real Order UUID:`);
-    console.log(`curl -X POST http://localhost:5000/api/dispatch/assign/${order.id}`);
   } catch (err) {
     console.error('Seeding error:', err.message);
   }

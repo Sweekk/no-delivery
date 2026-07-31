@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS stores (
   name VARCHAR(100) NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+ALTER TABLE stores DISABLE ROW LEVEL SECURITY;
 
 -- DELIVERY PARTNERS
 CREATE TABLE IF NOT EXISTS delivery_partners (
@@ -17,6 +18,7 @@ CREATE TABLE IF NOT EXISTS delivery_partners (
   status VARCHAR(50) NOT NULL DEFAULT 'AVAILABLE', -- AVAILABLE, BUSY, OFFLINE
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+ALTER TABLE delivery_partners DISABLE ROW LEVEL SECURITY;
 
 -- ORDER TABLE
 CREATE TABLE IF NOT EXISTS order_table (
@@ -32,6 +34,7 @@ CREATE TABLE IF NOT EXISTS order_table (
   assigned_at TIMESTAMP WITH TIME ZONE,
   total_amount NUMERIC(10, 2)
 );
+ALTER TABLE order_table DISABLE ROW LEVEL SECURITY;
 
 -- ITEM TABLE (from customer's list)
 CREATE TABLE IF NOT EXISTS item_table (
@@ -43,6 +46,7 @@ CREATE TABLE IF NOT EXISTS item_table (
   status VARCHAR(50) NOT NULL DEFAULT 'PENDING', -- PENDING, PICKED, SUBSTITUTED, SKIPPED, CONFIRMED
   replacement_item_id UUID
 );
+ALTER TABLE item_table DISABLE ROW LEVEL SECURITY;
 
 -- SUBSTITUTIONS LOG
 CREATE TABLE IF NOT EXISTS substitutions (
@@ -53,6 +57,7 @@ CREATE TABLE IF NOT EXISTS substitutions (
   status VARCHAR(50) DEFAULT 'pending', -- pending, accepted, rejected, timed_out
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+ALTER TABLE substitutions DISABLE ROW LEVEL SECURITY;
 
 -- =============================================
 -- DATABASE-LEVEL GUARD

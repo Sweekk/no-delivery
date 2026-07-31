@@ -175,3 +175,4 @@ ORDER BY order_status;
 -- Admin dashboard views (should return data)
 SELECT * FROM store_substitution_rates;
 SELECT * FROM store_fulfillment_times;
+

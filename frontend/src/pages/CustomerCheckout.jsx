@@ -1,13 +1,20 @@
 import React from 'react';
 import CartUI from '../components/customer/CartUI';
 import ReviewSubstitutesModal from '../components/customer/ReviewSubstitutesModal';
+import './CustomerCheckout.css';
 
 export default function CustomerCheckout() {
   return (
-    <div className="container mx-auto p-4 space-y-4">
-      <h1 className="text-2xl font-bold">Checkout Page</h1>
-      <CartUI />
-      <ReviewSubstitutesModal />
+    <div className="customer-page">
+      <header className="customer-page-header">
+        <p>QuickFIx Grocery Delivery</p>
+        <h1>Your grocery order</h1>
+        <span>Review your cart and any suggested replacements.</span>
+      </header>
+      <section className="customer-content">
+        <CartUI />
+        <ReviewSubstitutesModal />
+      </section>
     </div>
   );
 }

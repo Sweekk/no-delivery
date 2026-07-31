@@ -2,15 +2,21 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const express = require('express');
 const cors = require('cors');
+const pickerRoutes = require('./routes/picker');
 const app = express();
 
 app.use(cors());
-
 app.use(express.json());
 
-// Routes
-app.use('/api/orders', require('./routes/orders'));
-app.use('/api/picker', require('./routes/picker'));
+// Picker routes mounted for all client route patterns specified in requirements
+app.use('/api/picker', pickerRoutes);
+app.use('/api/order', pickerRoutes);
+app.use('/api/orders', pickerRoutes);
+app.use('/api/item', pickerRoutes);
+app.use('/order', pickerRoutes);
+app.use('/item', pickerRoutes);
+
+// Additional domain routes
 app.use('/api/substitution', require('./routes/substitution'));
 app.use('/api/dispatch', require('./routes/dispatch'));
 app.use('/api/admin', require('./routes/admin'));
