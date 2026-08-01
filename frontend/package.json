@@ -34,7 +34,7 @@
     "typescript": "~6.0.2",
     "vite": "^5.1.4"
   },
-  "description": "",
+  "description": "QuickFix Grocery Frontend Application (Vite)",
   "author": "",
   "license": "ISC"
 }

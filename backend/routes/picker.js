@@ -27,4 +27,4 @@ router.patch('/:list_id', pickerController.updateItemStatus);
 router.get('/active-run', pickerController.getPendingOrders);
 router.post('/item-not-found', pickerController.updateItemStatus);
 
-module.exports = router;
+module.exports = router

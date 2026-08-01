@@ -12,9 +12,10 @@ export default function OrderQueue({ onSelectOrder }) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/picker/orders/pending');
+      const res = await fetch('/api/picker/orders');
       const data = await res.json();
-      setOrders(data.success && Array.isArray(data.orders) ? data.orders : []);
+      const orderList = Array.isArray(data) ? data : (data.orders || []);
+      setOrders(orderList);
     } catch (err) {
       console.error('Error loading pending orders:', err);
       setError('Could not refresh the order queue. Please try again.');

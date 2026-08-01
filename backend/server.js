@@ -35,6 +35,7 @@ app.use('/item', pickerRoutes);
 app.use('/api/substitution', substitutionRoutes);
 app.use('/api/dispatch', dispatchRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/driver', require('./routes/driver'));
 
 const PORT = process.env.PORT || 5001;
 app.listen(PORT, () => {

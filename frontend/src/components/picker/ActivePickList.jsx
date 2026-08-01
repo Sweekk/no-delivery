@@ -35,54 +35,6 @@ const DEFAULT_PICK_ITEMS = [
     status: 'pending',
     badges: ['Heavy Item'],
   },
-  {
-    list_id: 'l3',
-    item_id: 'item-103',
-    item_name: 'Nestle Maggi 2-Minute Masala Noodles 560g',
-    brand: 'Nestle',
-    category: 'Instant Food',
-    qty_requested: 3,
-    price: 96,
-    aisle: 'Aisle C-02',
-    rack: 'Rack R-08',
-    weight: '560 g (Pack of 8)',
-    barcode: '8901058852312',
-    stock_qty: 32,
-    status: 'pending',
-    badges: ['Fragile'],
-  },
-  {
-    list_id: 'l4',
-    item_id: 'item-104',
-    item_name: 'Kwality Wall’s Vanilla Magic Ice Cream Tub',
-    brand: 'Kwality Wall’s',
-    category: 'Frozen Desserts',
-    qty_requested: 1,
-    price: 180,
-    aisle: 'Freezer F-01',
-    rack: 'Rack R-01',
-    weight: '700 ml',
-    barcode: '8901030712390',
-    stock_qty: 10,
-    status: 'pending',
-    badges: ['Frozen', 'High Priority'],
-  },
-  {
-    list_id: 'l5',
-    item_id: 'item-105',
-    item_name: 'Aashirvaad Superior MP Whole Wheat Atta 5kg',
-    brand: 'Aashirvaad',
-    category: 'Atta & Flours',
-    qty_requested: 1,
-    price: 265,
-    aisle: 'Aisle D-05',
-    rack: 'Rack R-15',
-    weight: '5 kg / Bag',
-    barcode: '8901058001201',
-    stock_qty: 15,
-    status: 'pending',
-    badges: ['Heavy Item'],
-  },
 ];
 
 const MOCK_SUBSTITUTES = {
@@ -96,7 +48,7 @@ const MOCK_SUBSTITUTES = {
 export default function ActivePickList({ orderId = 'ORD-94021', onBackToQueue }) {
   const [order, setOrder] = useState({
     order_id: orderId,
-    display_name: 'Grocery order #ORD-94021',
+    display_name: `Grocery order #${typeof orderId === 'string' ? orderId.substring(0, 8) : orderId}`,
     store_name: 'FreshPoint Dark Store Hub - Indiranagar',
     customer_priority: '⚡ Express Priority',
     picker_name: 'Alex Morgan',
@@ -105,7 +57,7 @@ export default function ActivePickList({ orderId = 'ORD-94021', onBackToQueue })
   });
 
   const [items, setItems] = useState(DEFAULT_PICK_ITEMS);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [toastError, setToastError] = useState(null);
   const [toastSuccess, setToastSuccess] = useState(null);
   const [modalAlert, setModalAlert] = useState(null);
@@ -113,9 +65,9 @@ export default function ActivePickList({ orderId = 'ORD-94021', onBackToQueue })
 
   // Feature States
   const [timerSeconds, setTimerSeconds] = useState(255); // 04:15 elapsed
-  const [notFoundModalItem, setNotFoundModalItem] = useState(null); // Item target for "Are you sure?" modal
-  const [substitutionDrawerItem, setSubstitutionDrawerItem] = useState(null); // Item target for substitution side drawer
-  const [selectedDetailsItem, setSelectedDetailsItem] = useState(null); // Item target for product details modal
+  const [notFoundModalItem, setNotFoundModalItem] = useState(null);
+  const [substitutionDrawerItem, setSubstitutionDrawerItem] = useState(null);
+  const [selectedDetailsItem, setSelectedDetailsItem] = useState(null);
 
   // Ticking Timer Effect
   useEffect(() => {
@@ -131,18 +83,19 @@ export default function ActivePickList({ orderId = 'ORD-94021', onBackToQueue })
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
 
-  // Fetch Order details & items
+  // Fetch Order details and items with 5-second short polling
   useEffect(() => {
     let isMounted = true;
-    async function loadOrderData() {
+    async function loadOrderData(isBackground = false) {
+      if (!isBackground) setLoading(true);
       try {
         const res = await fetch(`/api/picker/order/${orderId}`);
         const data = await res.json();
 
-        if (isMounted && data && data.success) {
+        if (isMounted && data && (data.order_id || Array.isArray(data.items) || data.success)) {
           setOrder({
             order_id: data.order_id || orderId,
-            display_name: data.display_name || 'Grocery order #ORD-94021',
+            display_name: data.display_name || data.customer_name || `Grocery order #${orderId.substring(0, 8)}`,
             store_name: data.store_name || 'FreshPoint Dark Store Hub - Indiranagar',
             customer_priority: '⚡ Express Priority',
             picker_name: 'Alex Morgan',
@@ -154,34 +107,41 @@ export default function ActivePickList({ orderId = 'ORD-94021', onBackToQueue })
           if (rawItems.length > 0) {
             const enriched = rawItems.map((item, idx) => ({
               ...item,
-              item_name: item.item_id || `Grocery Item ${idx + 1}`,
+              item_name: item.item_name || item.item_id || `Grocery Item ${idx + 1}`,
               brand: item.brand || (idx % 2 === 0 ? 'Amul' : 'Nestle'),
               category: item.category || 'Dairy & Groceries',
               aisle: item.aisle || `Aisle A-0${(idx % 4) + 1}`,
-              rack: `Rack R-${10 + idx}`,
+              rack: item.rack || `Rack R-${10 + idx}`,
               weight: item.weight || '500 g / Unit',
-              barcode: `890126201012${idx}`,
-              stock_qty: 24 - idx * 3,
-              price: item.price || 85,
-              badges: [
+              barcode: item.barcode || `890126201012${idx}`,
+              stock_qty: item.stock_qty || (24 - idx * 3),
+              price: item.price || item.item_price || 85,
+              badges: item.badges || [
                 idx === 0 && 'High Priority',
                 idx === 1 && 'Fragile',
                 idx === 2 && 'Frozen',
                 idx === 3 && 'Heavy Item',
-                idx === 0 && 'Offer 10% Off',
               ].filter(Boolean),
             }));
-
             setItems(enriched);
           }
         }
       } catch (err) {
-        console.warn('Backend pick order fetch notice, using active items:', err);
+        console.warn('Backend pick order fetch notice:', err);
+      } finally {
+        if (isMounted && !isBackground) setLoading(false);
       }
     }
 
-    loadOrderData();
-    return () => { isMounted = false; };
+    loadOrderData(false);
+    const interval = setInterval(() => {
+      loadOrderData(true);
+    }, 5000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, [orderId]);
 
   const showToastError = (msg) => {
@@ -204,7 +164,7 @@ export default function ActivePickList({ orderId = 'ORD-94021', onBackToQueue })
           return {
             ...item,
             status: newStatus,
-            replacement_item_id: newStatus === 'replaced' ? replacementId : null
+            replacement_item_id: newStatus === 'replaced' ? replacementId : item.replacement_item_id
           };
         }
         return item;
@@ -226,12 +186,12 @@ export default function ActivePickList({ orderId = 'ORD-94021', onBackToQueue })
       });
 
       const resData = await response.json();
-      if (!response.ok || !resData.success) {
+      if (!response.ok) {
         setItems(prevItems);
-        showToastError(`Failed to update item status: ${resData?.error || 'Server error'}`);
+        showToastError(`Failed to update item status: ${resData?.error || resData?.message || 'Server error'}`);
       }
     } catch (err) {
-      // Local optimistic state is kept so picker workflow is uninterrupted
+      // Keep optimistic state
     }
   };
 
@@ -241,9 +201,13 @@ export default function ActivePickList({ orderId = 'ORD-94021', onBackToQueue })
     handleUpdateStatus(item.list_id, 'found');
   };
 
-  // Not Found Click Handler (Triggers "Are you sure?" modal)
+  // Not Found Click Handler
   const handleNotFoundClick = (item) => {
-    setNotFoundModalItem(item);
+    if (item.sub_rules === 'ask') {
+      handleUpdateStatus(item.list_id, 'awaiting_customer');
+    } else {
+      setNotFoundModalItem(item);
+    }
   };
 
   const confirmNotFound = (item) => {
@@ -265,11 +229,14 @@ export default function ActivePickList({ orderId = 'ORD-94021', onBackToQueue })
   // Complete Order Handler
   const handleCompleteOrder = async () => {
     const pendingCount = items.filter((i) => i.status === 'pending').length;
+    const awaitingCount = items.filter((i) => i.status === 'awaiting_customer').length;
 
-    if (pendingCount > 0) {
+    if (pendingCount > 0 || awaitingCount > 0) {
       setModalAlert({
         title: '⚠️ Incomplete Pick List',
-        text: `There ${pendingCount === 1 ? 'is' : 'are'} still ${pendingCount} pending item${pendingCount === 1 ? '' : 's'} on this pick list. Please mark every single item as Found, Not Found, or Substitute before completing.`,
+        text: awaitingCount > 0
+          ? `There ${awaitingCount === 1 ? 'is' : 'are'} still ${awaitingCount} item${awaitingCount === 1 ? '' : 's'} awaiting customer response. Please wait for the customer to respond before completing.`
+          : `There ${pendingCount === 1 ? 'is' : 'are'} still ${pendingCount} pending item${pendingCount === 1 ? '' : 's'} on this pick list. Please resolve every item before completing.`,
         isSuccess: false
       });
       return;
@@ -317,6 +284,14 @@ export default function ActivePickList({ orderId = 'ORD-94021', onBackToQueue })
 
   return (
     <div className="picker-container">
+      {/* CSS Keyframes for Spinner */}
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
+
       {/* Toast Feedback Messages */}
       {toastError && <div className="toast-error">⚠️ {toastError}</div>}
       {toastSuccess && <div className="toast-success">✅ {toastSuccess}</div>}
@@ -330,6 +305,8 @@ export default function ActivePickList({ orderId = 'ORD-94021', onBackToQueue })
             </button>
             <div>
               <h1 className="text-lg font-extrabold text-slate-900">{order?.display_name || 'Grocery Order'}</h1>
+            </div>
+          </div>
             </div>
           </div>
 
