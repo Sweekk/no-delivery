@@ -307,8 +307,6 @@ export default function ActivePickList({ orderId = 'ORD-94021', onBackToQueue })
               <h1 className="text-lg font-extrabold text-slate-900">{order?.display_name || 'Grocery Order'}</h1>
             </div>
           </div>
-            </div>
-          </div>
 
           <div className="flex items-center gap-2">
             <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-extrabold">
