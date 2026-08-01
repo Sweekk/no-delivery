@@ -32,6 +32,7 @@ export default function CustomerCheckout() {
   
   // Notification / Alert Banner
   const [notification, setNotification] = useState(null);
+  const [modalSubProduct, setModalSubProduct] = useState('Amul Taaza Toned Milk 1L');
 
   // Fetch stores on mount
   useEffect(() => {
@@ -603,6 +604,65 @@ export default function CustomerCheckout() {
         )}
 
       </section>
+
+      {/* Customer Resolution Modal Popup (Step B & C) */}
+      {activeOrder?.items?.some(i => i.status === 'awaiting_customer') && (() => {
+        const itemToResolve = activeOrder.items.find(i => i.status === 'awaiting_customer');
+        const itemName = getProductNameByUUID(itemToResolve.item_id);
+
+        return (
+          <div className="modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.75)', backdropFilter: 'blur(4px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+            <div className="modal-box" style={{ background: '#fff', width: '100%', maxWidth: '480px', borderRadius: '1rem', padding: '1.5rem', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)' }}>
+              <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>⚠️ Out of Stock Alert</div>
+              <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.2rem', color: '#0f172a' }}>
+                We are out of {itemName}!
+              </h3>
+              <p style={{ color: '#475569', fontSize: '0.9rem', marginBottom: '1.25rem' }}>
+                How would you like to handle this item? You can skip it for a refund or select a substitute.
+              </p>
+
+              <div style={{ marginBottom: '1.25rem' }}>
+                <label htmlFor="modal-sub-select" style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: '#334155', marginBottom: '0.4rem' }}>
+                  Select replacement product (if substituting):
+                </label>
+                <select
+                  id="modal-sub-select"
+                  value={modalSubProduct}
+                  onChange={(e) => setModalSubProduct(e.target.value)}
+                  style={{ width: '100%', padding: '0.6rem', borderRadius: '0.5rem', border: '1px solid #cbd5e1', fontSize: '0.9rem' }}
+                >
+                  {MOCK_PRODUCTS.filter(p => p.uuid !== itemToResolve.item_id && p.name !== itemName).map(p => (
+                    <option key={p.uuid} value={p.name}>
+                      {p.name} - ₹{p.price}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  style={{ flex: 1, padding: '0.65rem', borderRadius: '0.5rem', border: '1px solid #ef4444', background: '#fef2f2', color: '#dc2626', fontWeight: 700, cursor: 'pointer' }}
+                  onClick={() => handleResolveSubstitution(itemToResolve.list_id, 'skip', null)}
+                >
+                  Skip Item (Refund)
+                </button>
+                <button
+                  type="button"
+                  style={{ flex: 1, padding: '0.65rem', borderRadius: '0.5rem', border: 'none', background: '#0c831f', color: '#fff', fontWeight: 700, cursor: 'pointer' }}
+                  onClick={() => {
+                    const chosenSub = modalSubProduct || MOCK_PRODUCTS.find(p => p.uuid !== itemToResolve.item_id)?.name || 'Substitute Item';
+                    handleResolveSubstitution(itemToResolve.list_id, 'substitute', chosenSub);
+                  }}
+                >
+                  Substitute Item
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
+

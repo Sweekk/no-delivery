@@ -139,6 +139,7 @@ function normalizeItemStatus(dbStatus) {
   if (s === 'picked' || s === 'found') return 'found';
   if (s === 'skipped' || s === 'not_found') return 'not_found';
   if (s === 'substituted' || s === 'replaced') return 'replaced';
+  if (s === 'awaiting_customer') return 'awaiting_customer';
   return 'pending';
 }
 
@@ -392,11 +393,11 @@ exports.updateItemStatus = async (req, res) => {
   const { list_id } = req.params;
   const { status, replacement_item_id } = req.body;
 
-  const validStatuses = ['found', 'not_found', 'replaced'];
+  const validStatuses = ['found', 'not_found', 'replaced', 'awaiting_customer'];
   if (!status || !validStatuses.includes(status.toLowerCase())) {
     return res.status(400).json({
       success: false,
-      error: `Invalid status: '${status}'. Must be one of: 'found', 'not_found', or 'replaced'.`
+      error: `Invalid status: '${status}'. Must be one of: 'found', 'not_found', 'replaced', or 'awaiting_customer'.`
     });
   }
 
@@ -406,11 +407,13 @@ exports.updateItemStatus = async (req, res) => {
   const dbStatusMap = {
     found: 'PICKED',
     not_found: 'SKIPPED',
-    replaced: 'SUBSTITUTED'
+    replaced: 'SUBSTITUTED',
+    awaiting_customer: 'awaiting_customer'
   };
 
   try {
-    const { data, error } = await supabase
+    let updated = null;
+    const { data: d1, error: e1 } = await supabase
       .from('item_table')
       .update({
         status: dbStatusMap[normalizedStatus],
@@ -419,7 +422,24 @@ exports.updateItemStatus = async (req, res) => {
       .eq('list', list_id)
       .select();
 
-    if (!error && data && data.length > 0) {
+    if (!e1 && d1 && d1.length > 0) {
+      updated = d1[0];
+    } else {
+      const { data: d2, error: e2 } = await supabase
+        .from('item_table')
+        .update({
+          status: dbStatusMap[normalizedStatus],
+          replacement_item_id: normalizedStatus === 'replaced' ? replacement_item_id : null
+        })
+        .eq('list_id', list_id)
+        .select();
+
+      if (!e2 && d2 && d2.length > 0) {
+        updated = d2[0];
+      }
+    }
+
+    if (updated) {
       return res.status(200).json({
         success: true,
         message: 'Item status updated',
@@ -496,13 +516,13 @@ exports.completeOrder = async (req, res) => {
     }
   }
 
-  // Check for any pending items
-  const pendingItems = items.filter(i => i.status === 'pending');
+  // Check for any pending or awaiting customer items
+  const pendingItems = items.filter(i => i.status === 'pending' || i.status === 'awaiting_customer');
 
   if (pendingItems.length > 0) {
     return res.status(400).json({
       success: false,
-      error: `Cannot complete order: ${pendingItems.length} item(s) are still pending resolution. Please mark every item as Found, Not Found, or Substitute before completing.`,
+      error: `Cannot complete order: ${pendingItems.length} item(s) are still pending resolution or awaiting customer response.`,
       pending_count: pendingItems.length
     });
   }
@@ -539,3 +559,4 @@ exports.completeOrder = async (req, res) => {
 // Aliases for compatibility
 exports.getActiveRun = exports.getPendingOrders;
 exports.handleNotFound = exports.updateItemStatus;
+exports.memoryStore = memoryStore;

@@ -6,17 +6,15 @@ export default function ActivePickList({ orderId, onBackToQueue }) {
   const [order, setOrder] = useState(null);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [substituteInputs, setSubstituteInputs] = useState({}); // { [list_id]: string }
-  const [activeSubstituteId, setActiveSubstituteId] = useState(null); // list_id currently editing sub
   const [toastError, setToastError] = useState(null);
   const [modalAlert, setModalAlert] = useState(null); // { title, text, isSuccess }
   const [isCompleting, setIsCompleting] = useState(false);
 
-  // Fetch Order details and items
+  // Fetch Order details and items with 5-second short polling (Step D)
   useEffect(() => {
     let isMounted = true;
-    async function loadOrderData() {
-      setLoading(true);
+    async function loadOrderData(isBackground = false) {
+      if (!isBackground) setLoading(true);
       try {
         const res = await fetch(`/api/picker/order/${orderId}`);
         const data = await res.json();
@@ -28,21 +26,28 @@ export default function ActivePickList({ orderId, onBackToQueue }) {
               store_name: data.store_name || 'QuickFIx Grocery Store'
             });
             setItems(data.items || []);
-          } else {
+          } else if (!isBackground) {
             showToast('Failed to load order items.');
           }
         }
       } catch (err) {
         console.error('Error fetching order:', err);
-        if (isMounted) showToast('Network error loading order.');
+        if (isMounted && !isBackground) showToast('Network error loading order.');
       } finally {
-        if (isMounted) setLoading(false);
+        if (isMounted && !isBackground) setLoading(false);
       }
     }
 
-    loadOrderData();
+    loadOrderData(false);
+
+    // Poll every 5 seconds for status changes (Step D: unlock item when customer responds)
+    const interval = setInterval(() => {
+      loadOrderData(true);
+    }, 5000);
+
     return () => {
       isMounted = false;
+      clearInterval(interval);
     };
   }, [orderId]);
 
@@ -63,17 +68,12 @@ export default function ActivePickList({ orderId, onBackToQueue }) {
           return {
             ...item,
             status: newStatus,
-            replacement_item_id: newStatus === 'replaced' ? replacementId : null
+            replacement_item_id: newStatus === 'replaced' ? replacementId : item.replacement_item_id
           };
         }
         return item;
       })
     );
-
-    // Clear active substitute editing mode if set
-    if (activeSubstituteId === listId && newStatus !== 'replaced') {
-      setActiveSubstituteId(null);
-    }
 
     // Fire PATCH request in background
     try {
@@ -100,33 +100,25 @@ export default function ActivePickList({ orderId, onBackToQueue }) {
     }
   };
 
-  const handleSubstituteClick = (listId) => {
-    if (activeSubstituteId === listId) {
-      setActiveSubstituteId(null);
-    } else {
-      setActiveSubstituteId(listId);
-    }
-  };
-
-  const handleConfirmSubstitute = (listId) => {
-    const inputVal = substituteInputs[listId]?.trim();
-    if (!inputVal) {
-      showToast('Please enter a replacement product name.');
-      return;
-    }
-    handleUpdateStatus(listId, 'replaced', inputVal);
-    setActiveSubstituteId(null);
+  // Step A: Tapping "Not Found"
+  const handleNotFoundClick = (item) => {
+    // If sub_rules === 'ask', send { status: "awaiting_customer" }
+    const targetStatus = item.sub_rules === 'ask' ? 'awaiting_customer' : 'not_found';
+    handleUpdateStatus(item.list_id, targetStatus);
   };
 
   // Complete Order Gate Handler
   const handleCompleteOrder = async () => {
     const pendingCount = items.filter((i) => i.status === 'pending').length;
+    const awaitingCount = items.filter((i) => i.status === 'awaiting_customer').length;
 
     // Client-side gate check
-    if (pendingCount > 0) {
+    if (pendingCount > 0 || awaitingCount > 0) {
       setModalAlert({
         title: '⚠️ Incomplete Pick List',
-        text: `There ${pendingCount === 1 ? 'is' : 'are'} still ${pendingCount} pending item${pendingCount === 1 ? '' : 's'} on this pick list. Please mark every single item as Found 🟩, Not Found 🟥, or Substitute 🟨 before completing.`,
+        text: awaitingCount > 0
+          ? `There ${awaitingCount === 1 ? 'is' : 'are'} still ${awaitingCount} item${awaitingCount === 1 ? '' : 's'} awaiting customer response. Please wait for the customer to respond before completing.`
+          : `There ${pendingCount === 1 ? 'is' : 'are'} still ${pendingCount} pending item${pendingCount === 1 ? '' : 's'} on this pick list. Please resolve every item before completing.`,
         isSuccess: false
       });
       return;
@@ -175,6 +167,14 @@ export default function ActivePickList({ orderId, onBackToQueue }) {
 
   return (
     <div className="picker-container">
+      {/* CSS Keyframes for Spinner */}
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
+
       {/* Toast Error Popup */}
       {toastError && <div className="toast-error">⚠️ {toastError}</div>}
 
@@ -197,29 +197,32 @@ export default function ActivePickList({ orderId, onBackToQueue }) {
             </p>
           </div>
           <div className="progress-summary">
-            <span>{items.filter((i) => i.status !== 'pending').length} / {items.length} Picked</span>
+            <span>{items.filter((i) => i.status !== 'pending' && i.status !== 'awaiting_customer').length} / {items.length} Picked</span>
           </div>
         </div>
       </div>
 
-      {/* Item List (Screen B) */}
+      {/* Item List */}
       <div className="item-list-container">
         {items.map((item) => {
-          const isPending = item.status === 'pending';
           const isFound = item.status === 'found';
           const isNotFound = item.status === 'not_found';
           const isReplaced = item.status === 'replaced';
-          const isEditingSub = activeSubstituteId === item.list_id;
+          const isAwaitingCustomer = item.status === 'awaiting_customer';
 
           return (
             <div key={item.list_id} className={`item-card status-${item.status}`}>
               <div className="item-top-row">
                 <div>
-                  {/* Display item_id and requested quantity as required */}
                   <div className="item-title">{item.item_id}</div>
                   <div className="item-meta" style={{ marginTop: '0.3rem' }}>
                     {item.category && <span>Category: {item.category}</span>}
                     {item.aisle && <span className="aisle-tag">📍 {item.aisle}</span>}
+                    {item.sub_rules && (
+                      <span style={{ marginLeft: '0.5rem', fontSize: '0.78rem', color: '#475569', background: '#f1f5f9', padding: '0.15rem 0.4rem', borderRadius: '0.25rem' }}>
+                        Rule: {item.sub_rules}
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -230,71 +233,42 @@ export default function ActivePickList({ orderId, onBackToQueue }) {
 
               {/* Display replacement tag if status is replaced */}
               {isReplaced && item.replacement_item_id && (
-                <div className="replacement-badge">
-                  🟨 Substituted with: <strong>{item.replacement_item_id}</strong>
+                <div className="replacement-badge" style={{ marginTop: '0.5rem', padding: '0.4rem 0.75rem', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '0.5rem', color: '#1e40af', fontSize: '0.85rem' }}>
+                  🔄 Substituted with: <strong>{item.replacement_item_id}</strong>
                 </div>
               )}
 
-              {/* 3-Button Row Interaction Design */}
-              <div className="status-action-row">
-                <button
-                  type="button"
-                  className={`btn-status btn-found ${isFound ? 'active' : ''}`}
-                  onClick={() => handleUpdateStatus(item.list_id, 'found')}
-                >
-                  <span>🟩</span>
-                  <span>{isFound ? 'Found ✓' : 'Found'}</span>
-                </button>
-
-                <button
-                  type="button"
-                  className={`btn-status btn-not-found ${isNotFound ? 'active' : ''}`}
-                  onClick={() => handleUpdateStatus(item.list_id, 'not_found')}
-                >
-                  <span>🟥</span>
-                  <span>{isNotFound ? 'Not Found ✗' : 'Not Found'}</span>
-                </button>
-
-                <button
-                  type="button"
-                  className={`btn-status btn-substitute ${isReplaced || isEditingSub ? 'active' : ''}`}
-                  onClick={() => handleSubstituteClick(item.list_id)}
-                >
-                  <span>🟨</span>
-                  <span>{isReplaced ? 'Substituted ✎' : 'Substitute'}</span>
-                </button>
-              </div>
-
-              {/* Dynamic Text Input Field (Appears ONLY when Substitute/Replaced is clicked/selected) */}
-              {(isEditingSub || (isReplaced && !item.replacement_item_id)) && (
-                <div className="substitute-input-container">
-                  <label htmlFor={`sub-input-${item.list_id}`} className="substitute-label">
-                    Replacement product
-                  </label>
-                  <div className="substitute-row">
-                    <input
-                      id={`sub-input-${item.list_id}`}
-                      type="text"
-                      className="substitute-input"
-                      placeholder="Enter the replacement product name"
-                      value={substituteInputs[item.list_id] || item.replacement_item_id || ''}
-                      onChange={(e) =>
-                        setSubstituteInputs({
-                          ...substituteInputs,
-                          [item.list_id]: e.target.value
-                        })
-                      }
-                    />
+              {/* Status Action Area */}
+              <div className="status-action-row" style={{ marginTop: '0.75rem' }}>
+                {isAwaitingCustomer ? (
+                  <div className="awaiting-customer-banner" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', padding: '0.6rem 1rem', borderRadius: '0.6rem', background: '#fffbeb', border: '1px solid #fcd34d', color: '#b45309', fontWeight: 600, fontSize: '0.9rem', width: '100%' }}>
+                    <div style={{ width: '16px', height: '16px', border: '2px solid #b45309', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                    <span>Waiting on Customer...</span>
+                  </div>
+                ) : (
+                  <>
                     <button
                       type="button"
-                      className="btn-confirm-sub"
-                      onClick={() => handleConfirmSubstitute(item.list_id)}
+                      className={`btn-status btn-found ${isFound ? 'active' : ''}`}
+                      onClick={() => handleUpdateStatus(item.list_id, 'found')}
+                      style={{ flex: 1 }}
                     >
-                      Save Sub
+                      <span>🟩</span>
+                      <span>{isFound ? 'Found ✓' : 'Found'}</span>
                     </button>
-                  </div>
-                </div>
-              )}
+
+                    <button
+                      type="button"
+                      className={`btn-status btn-not-found ${isNotFound ? 'active' : ''}`}
+                      onClick={() => handleNotFoundClick(item)}
+                      style={{ flex: 1 }}
+                    >
+                      <span>🟥</span>
+                      <span>{isNotFound ? 'Not Found ✗' : 'Not Found'}</span>
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
           );
         })}
