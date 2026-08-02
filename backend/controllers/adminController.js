@@ -75,44 +75,93 @@ exports.getMetrics = async (req, res) => {
     const allOrders = orders || [];
     const total_orders = allOrders.length;
 
-    const total_revenue = allOrders.reduce((sum, o) => {
+    // Revenue only counts confirmed+ orders (order_confirmed, assigned_to_delivery, out_for_delivery, delivered, FINALIZED)
+    const confirmedOrders = allOrders.filter(o => {
+      const st = String(o.order_status).toLowerCase();
+      return ['order_confirmed', 'assigned_to_delivery', 'out_for_delivery', 'delivered', 'finalized'].includes(st);
+    });
+
+    const total_revenue = confirmedOrders.reduce((sum, o) => {
       const amt = parseFloat(o.total_amount) || 0;
       return sum + amt;
     }, 0);
 
-    const average_order_value = total_orders > 0
-      ? Number((total_revenue / total_orders).toFixed(2))
+    const average_order_value = confirmedOrders.length > 0
+      ? Number((total_revenue / confirmedOrders.length).toFixed(2))
       : 0;
 
     const status_breakdown = {
+      placed: 0,
+      assigned_to_picker: 0,
+      picking_in_progress: 0,
+      picking_complete: 0,
+      order_confirmed: 0,
+      assigned_to_delivery: 0,
+      out_for_delivery: 0,
+      delivered: 0,
+      cancelled: 0,
       PENDING: 0,
       PICKING: 0,
       AWAITING_SUBSTITUTION: 0,
       FINALIZED: 0,
       ASSIGNED: 0,
-      DELIVERED: 0,
+      DELIVERED: 0
     };
 
     allOrders.forEach((o) => {
-      const st = (o.order_status || 'PENDING').toUpperCase();
+      const st = (o.order_status || 'placed').toLowerCase();
       if (status_breakdown[st] !== undefined) {
         status_breakdown[st] += 1;
       } else {
-        status_breakdown[st] = 1;
+        const uppercaseSt = st.toUpperCase();
+        if (status_breakdown[uppercaseSt] !== undefined) {
+          status_breakdown[uppercaseSt] += 1;
+        } else {
+          status_breakdown[st] = 1;
+        }
       }
     });
+
+    // Query item substitution / skip / timeout statistics from item_table
+    const { data: itemStats } = await supabase
+      .from('item_table')
+      .select('status, sub_rules');
+
+    let totalItems = 0;
+    let substitutedCount = 0;
+    let skippedCount = 0;
+    let timeoutCount = 0;
+
+    (itemStats || []).forEach(i => {
+      totalItems += 1;
+      const st = String(i.status || '').toUpperCase();
+      if (st === 'SUBSTITUTED') substitutedCount += 1;
+      if (st === 'SKIPPED' || st === 'SKIPPED_TIMEOUT') skippedCount += 1;
+    });
+
+    // Count timed-out substitutions from the substitutions table
+    const { data: timedOutSubs } = await supabase
+      .from('substitutions')
+      .select('id')
+      .eq('status', 'timed_out');
+    timeoutCount = (timedOutSubs || []).length;
+
+    const substitution_rate = totalItems > 0
+      ? Number((((substitutedCount + skippedCount) / totalItems) * 100).toFixed(1))
+      : 0;
+
+    // Query worker load from assignments table
+    const { data: activeAssignments } = await supabase
+      .from('assignments')
+      .select('picker_id, delivery_partner_id, role')
+      .eq('status', 'active');
+
+    const activePickersCount = new Set((activeAssignments || []).filter(a => a.role === 'picker' && a.picker_id).map(a => a.picker_id)).size;
+    const activeDriversCount = new Set((activeAssignments || []).filter(a => a.role === 'delivery' && a.delivery_partner_id).map(a => a.delivery_partner_id)).size;
 
     const { count: storesCount } = await supabase
       .from('stores')
       .select('*', { count: 'exact', head: true });
-
-    const { data: partners } = await supabase
-      .from('delivery_partners')
-      .select('id, status');
-
-    const activePartners = (partners || []).filter(
-      (p) => p.status === 'AVAILABLE' || p.status === 'BUSY'
-    ).length;
 
     const recent_orders = allOrders.slice(0, 10).map((o) => ({
       order_id: o.order_id,
@@ -127,7 +176,15 @@ exports.getMetrics = async (req, res) => {
       total_revenue: Number(total_revenue.toFixed(2)),
       average_order_value,
       active_stores: storesCount || 0,
-      active_delivery_partners: activePartners,
+      active_pickers: activePickersCount,
+      active_delivery_partners: activeDriversCount,
+      substitution_analytics: {
+        total_items: totalItems,
+        substituted_count: substitutedCount,
+        skipped_count: skippedCount,
+        timeout_count: timeoutCount,
+        substitution_rate
+      },
       status_breakdown,
       recent_orders,
     });

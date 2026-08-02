@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { ShoppingBag } from 'lucide-react';
 import { PRODUCTS } from '../../data/products.js';
 import { Navbar } from '../../components/Navbar.jsx';
@@ -42,6 +42,13 @@ export const Home = ({
   const [profileTab, setProfileTab] = useState('orders');
   const [searchQuery, setSearchQuery] = useState('');
   const [cart, setCart] = useState([]);
+
+  // Auto-switch to order_status view when 3-minute picker review notification arrives
+  useEffect(() => {
+    if ((activeOrder?.hasPendingNotification || activeOrder?.stage === 'Pending Customer Review') && customerView !== 'order_status') {
+      setCustomerView('order_status');
+    }
+  }, [activeOrder?.hasPendingNotification, activeOrder?.stage, customerView]);
 
   const greeting = useMemo(() => {
     const hour = new Date().getHours();

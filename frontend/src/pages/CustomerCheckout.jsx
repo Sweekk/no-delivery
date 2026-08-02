@@ -88,7 +88,7 @@ export default function CustomerCheckout() {
     if (!prod) return;
 
     setCart(prev => {
-      const existingIndex = prev.findIndex(item => item.item_id === prod.uuid);
+      const existingIndex = prev.findIndex(item => item.item_id === prod.uuid || item.product_name === prod.name);
       if (existingIndex > -1) {
         const updated = [...prev];
         updated[existingIndex].qty_requested += selectedQty;
@@ -96,6 +96,7 @@ export default function CustomerCheckout() {
       }
       return [...prev, {
         item_id: prod.uuid,
+        product_name: prod.name,
         name: prod.name,
         price: prod.price,
         qty_requested: selectedQty,
@@ -123,9 +124,10 @@ export default function CustomerCheckout() {
 
     try {
       const payload = {
-        store_id: selectedStoreId || 's0000001-0000-0000-0000-000000000001',
+        store_id: selectedStoreId,
         total_amount: calculateSubtotal() + 30, // Cart + delivery fee
         items: cart.map(item => ({
+          product_name: item.product_name || item.name,
           item_id: item.item_id,
           qty_requested: item.qty_requested,
           sub_rules: item.sub_rules
@@ -144,8 +146,20 @@ export default function CustomerCheckout() {
       setCart([]);
       setSelectedOrderId(data.order_id);
       setActiveTab('track');
-      setNotification({ type: 'success', message: `Order #${data.order_id.substring(0, 8)} placed successfully!` });
+      setNotification({ type: 'success', message: `Order #${data.order_id.substring(0, 8)} placed successfully! Picker notified.` });
       setTimeout(() => setNotification(null), 4000);
+
+      // Dispatch real-time notification to Picker Module
+      try {
+        window.dispatchEvent(new CustomEvent('new_order_placed', { detail: data }));
+        if ('BroadcastChannel' in window) {
+          const bc = new BroadcastChannel('quickfix_orders');
+          bc.postMessage({ type: 'NEW_ORDER', order_id: data.order_id });
+          setTimeout(() => bc.close(), 1000);
+        }
+      } catch (evtErr) {
+        console.log('Event notification dispatch error:', evtErr);
+      }
 
       // Refresh Order History
       fetchOrdersList();
@@ -494,7 +508,7 @@ export default function CustomerCheckout() {
                             <div className="replacement-arrow">➔</div>
                             <div className="item-side">
                               <span className="badge-replacement">Suggested Sub</span>
-                              <strong>{item.replacement_item_id || 'Alternative Item'}</strong>
+                              <strong>{getProductNameByUUID(item.replacement_item_id) || 'Alternative Item'}</strong>
                             </div>
                           </div>
                           <div className="resolution-card-actions">
@@ -534,7 +548,7 @@ export default function CustomerCheckout() {
                             {item.status || 'PENDING'}
                           </span>
                           {item.replacement_item_id && item.status !== 'awaiting_customer' && (
-                            <span className="replacement-note">Replaced: {item.replacement_item_id}</span>
+                            <span className="replacement-note">Replaced: {getProductNameByUUID(item.replacement_item_id)}</span>
                           )}
                         </div>
                       </div>

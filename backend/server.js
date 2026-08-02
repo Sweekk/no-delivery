@@ -13,6 +13,8 @@ const substitutionRoutes = require('./routes/substitution');
 const dispatchRoutes = require('./routes/dispatch');
 const adminRoutes = require('./routes/admin');
 
+const timerService = require('./services/timerService');
+
 const app = express();
 
 app.use(cors());
@@ -40,4 +42,6 @@ app.use('/api/driver', require('./routes/driver'));
 const PORT = process.env.PORT || 5001;
 app.listen(PORT, () => {
   console.log(`QuickFix Grocery Backend server running on port ${PORT}`);
+  // Start server-side 15-second timer expiry scanner
+  timerService.startServerTimerExpiryCron(15000);
 });

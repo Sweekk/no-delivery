@@ -141,7 +141,7 @@ export default function DeliveryPartnerOrders({ onNavigate }) {
                 <div className="flex items-center justify-between border-t border-gray-100 pt-3 text-xs">
                   <div>
                     <span className="text-gray-500">Order Subtotal: </span>
-                    <span className="font-black text-sm text-gray-900">₹{order.subtotal || order.total || 0}</span>
+                    <span className="font-black text-sm text-gray-900">₹{order.subtotal ?? order.total ?? order.totalAmount ?? order.total_amount ?? 0}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <button

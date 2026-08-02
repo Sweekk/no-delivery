@@ -3,6 +3,36 @@ import { INITIAL_ORDERS } from '../data/orders.js';
 import { PRODUCTS } from '../data/products.js';
 import { useAuth } from './AuthContext.jsx';
 
+const PRODUCT_NAMES_MAP = {
+  'e0000001-0000-0000-0000-000000000001': 'Organic Bananas 6pcs',
+  'e0000002-0000-0000-0000-000000000002': 'Amul Taaza Toned Milk 1L',
+  'e0000003-0000-0000-0000-000000000003': 'Whole Wheat Bread 400g',
+  'e0000004-0000-0000-0000-000000000004': 'Fortune Sunflower Oil 1L',
+  'e0000005-0000-0000-0000-000000000005': 'Doritos Nacho Cheese 150g',
+  'e0000006-0000-0000-0000-000000000006': 'Fresh Tomatoes 1kg',
+  'a0000000-0000-0000-0000-000000000001': 'Fuji Apples (Organic)',
+  'a0000000-0000-0000-0000-000000000002': 'Fresh Milk (1 Gallon)',
+  'a0000000-0000-0000-0000-000000000003': 'Organic Bananas (Bundle)',
+  'a0000000-0000-0000-0000-000000000004': 'Whole Wheat Sourdough',
+  'a0000000-0000-0000-0000-000000000005': 'Honey Oat Cereal Box',
+  'a0000000-0000-0000-0000-000000000006': 'Pasture-Raised Eggs (Dozen)',
+  'APPLE-FUJI-01': 'Fuji Apples (Organic)',
+  'MILK-GAL-02': 'Fresh Milk (1 Gallon)',
+  'BANANA-ORG-03': 'Organic Bananas (bundle)',
+  'BREAD-WW-04': 'Whole Wheat Sourdough',
+  'CEREAL-BOX-05': 'Honey Oat Cereal Box',
+  'EGGS-DOZ-06': 'Pasture-Raised Eggs (Dozen)'
+};
+
+export function getProductName(rawVal) {
+  if (!rawVal) return 'Grocery Item';
+  if (PRODUCT_NAMES_MAP[rawVal]) return PRODUCT_NAMES_MAP[rawVal];
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawVal)) {
+    return 'Organic Grocery Item';
+  }
+  return rawVal;
+}
+
 const OrderContext = createContext(undefined);
 
 export const OrderProvider = ({ children }) => {
@@ -44,6 +74,86 @@ export const OrderProvider = ({ children }) => {
 
   // Customer's primary active order
   const activeOrder = orders.find(o => o.stage !== 'Completed' && o.stage !== 'Cancelled') || orders[0] || null;
+
+  // 2-second background polling to sync live active order status from Supabase
+  useEffect(() => {
+    let isMounted = true;
+    async function syncActiveOrder() {
+      const targetOrderId = lastCreatedOrder?.order_id || activeOrder?.order_id || activeOrder?.id;
+      if (!targetOrderId || typeof targetOrderId !== 'string' || targetOrderId.startsWith('ord-17')) return;
+
+      try {
+        const res = await fetch(`/api/customer/order/${targetOrderId}/status`, { cache: 'no-store' });
+        if (res.ok && isMounted) {
+          const dbData = await res.json();
+          if (dbData && dbData.items) {
+            const awaitingItems = dbData.items.filter(i => String(i.status).toLowerCase() === 'awaiting_customer' || String(i.status).toLowerCase() === 'not_found');
+            
+            if (awaitingItems.length > 0 || dbData.order_status === 'AWAITING_SUBSTITUTION') {
+              setOrders(prev => {
+                const existing = prev.find(o => o.order_id === targetOrderId || o.id === targetOrderId);
+                if (existing && existing.hasPendingNotification && existing.stage === 'Pending Customer Review') {
+                  return prev; // Prevent infinite re-render loop
+                }
+
+                return prev.map(o => {
+                  if (o.order_id === targetOrderId || o.id === targetOrderId) {
+                    const unavailableList = awaitingItems.map(i => {
+                      // Use backend-provided product_name instead of raw UUID
+                      const displayName = i.product_name || getProductName(i.item_id);
+                      const itemPrice = parseFloat(i.price || i.item_price) || 60;
+                      
+                      // Use backend-provided suggested substitute if available
+                      const backendSub = i.suggested_substitute;
+                      const suggestedSub = backendSub 
+                        ? { id: backendSub.id, name: backendSub.name, price: parseFloat(backendSub.price) || 54, image: backendSub.image }
+                        : { id: 'sub-1', name: 'Similar Product', price: itemPrice };
+
+                      return {
+                        id: i.list || i.list_id,
+                        product: {
+                          id: i.list || i.list_id,
+                          name: displayName,
+                          price: itemPrice,
+                          category: i.category || null,
+                          image: 'https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?auto=format&fit=crop&w=400&q=80'
+                        },
+                        quantity: i.qty_requested || 1,
+                        unavailableAt: i.unavailable_marked_at ? new Date(i.unavailable_marked_at).getTime() : Date.now(),
+                        suggestedSubstitute: suggestedSub,
+                        allSubstitutes: i.all_substitutes || []
+                      };
+                    });
+
+                    return {
+                      ...o,
+                      stage: unavailableList.length > 0 ? 'Pending Customer Review' : (dbData.order_status === 'FINALIZED' ? 'Ready for Delivery' : o.stage),
+                      hasPendingNotification: unavailableList.length > 0,
+                      consolidatedNotification: unavailableList.length > 0 ? {
+                        orderId: targetOrderId,
+                        orderNumber: `ORD-${String(targetOrderId).slice(0, 8)}`,
+                        unavailableItems: unavailableList
+                      } : null
+                    };
+                  }
+                  return o;
+                });
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Sync order status notice:', err);
+      }
+    }
+
+    syncActiveOrder();
+    const interval = setInterval(syncActiveOrder, 2500);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [lastCreatedOrder?.order_id]);
 
   // Per-User Wishlist Actions with localStorage persistence
   const toggleWishlist = (product) => {
@@ -100,7 +210,7 @@ export const OrderProvider = ({ children }) => {
     };
   };
 
-  const createOrder = (cart, deliveryAddress) => {
+  const createOrder = async (cart, deliveryAddress) => {
     const deliveryFee = 30;
     const initialItems = cart.map((item, idx) => ({
       id: `oi-${Date.now()}-${idx}`,
@@ -111,13 +221,57 @@ export const OrderProvider = ({ children }) => {
 
     const { subtotal, totalAmount } = recalculateOrderTotals(initialItems, deliveryFee);
 
+    let realOrderId = `ord-${Date.now()}`;
+
+    // POST order to Supabase database backend
+    try {
+      const payload = {
+        store_id: '467a74f5-cc56-47a1-b932-c33dde36132e',
+        total_amount: totalAmount,
+        items: cart.map(item => ({
+          product_name: item.product.name,
+          item_id: item.product.uuid || item.product.id || 'e0000001-0000-0000-0000-000000000001',
+          qty_requested: item.quantity,
+          sub_rules: item.sub_rules || 'ask'
+        }))
+      };
+
+      const res = await fetch('/api/customer/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        const dbData = await res.json();
+        if (dbData.order_id) {
+          realOrderId = dbData.order_id;
+        }
+
+        // Broadcast real-time order event for instant picker alert
+        try {
+          window.dispatchEvent(new CustomEvent('new_order_placed', { detail: dbData }));
+          if ('BroadcastChannel' in window) {
+            const bc = new BroadcastChannel('quickfix_orders');
+            bc.postMessage({ type: 'NEW_ORDER', order_id: dbData.order_id });
+            setTimeout(() => bc.close(), 1000);
+          }
+        } catch (evtErr) {
+          console.log('Event notification error:', evtErr);
+        }
+      }
+    } catch (err) {
+      console.error('[DATABASE_ERROR] Failed to save customer order to Supabase:', err);
+    }
+
     const newOrder = {
-      id: `ord-${Date.now()}`,
-      orderNumber: `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
+      id: realOrderId,
+      order_id: realOrderId,
+      orderNumber: `ORD-${String(realOrderId).slice(0, 8)}`,
       customerName: 'Alex Morgan',
       customerPhone: '+91 98765-12345',
       deliveryAddress: deliveryAddress || addresses[0] || 'Flat 402, Green Park Residency, Sector 5',
-      storeName: 'QuickFix Green Park Store #402',
+      storeName: 'QuickFix Indiranagar Dark Store',
       items: initialItems,
       subtotal,
       deliveryFee,
@@ -407,7 +561,27 @@ export const OrderProvider = ({ children }) => {
     );
   };
 
-  const resolveBatchUnavailableItems = (orderId, responses) => {
+  const resolveBatchUnavailableItems = async (orderId, responses) => {
+    // Send backend PATCH request for each item decision to persist in Supabase
+    for (const itemId of Object.keys(responses)) {
+      const resp = responses[itemId];
+      const decision = resp.action === 'skip' ? 'skip' : (resp.action === 'custom_pick' || resp.action === 'self_pick' ? 'self_select' : 'picker_choice');
+      const subProdId = resp.replacementProduct?.id || resp.replacementProduct?.uuid || null;
+
+      try {
+        await fetch(`/api/orders/${orderId}/items/${itemId}/decision`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            customer_decision: decision,
+            substitute_product_id: subProdId
+          })
+        });
+      } catch (err) {
+        console.warn('Backend decision PATCH notice:', err);
+      }
+    }
+
     setOrders(prev =>
       prev.map(order => {
         if (order.id === orderId) {

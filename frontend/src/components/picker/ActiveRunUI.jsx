@@ -1,20 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { PickItemRow } from './PickItemRow.jsx';
 import { UnavailableActionModal } from './UnavailableActionModal.jsx';
-
-const PRODUCTS_CATALOG = [
-  { item_id: 'APPLE-FUJI-01', item_name: 'Fuji Apples (Organic)', icon: '🍎' },
-  { item_id: 'MILK-GAL-02', item_name: 'Fresh Milk (1 Gallon)', icon: '🥛' },
-  { item_id: 'BANANA-ORG-03', item_name: 'Organic Bananas (bundle)', icon: '🍌' },
-  { item_id: 'BREAD-WW-04', item_name: 'Whole Wheat Sourdough', icon: '🍞' },
-  { item_id: 'CEREAL-BOX-05', item_name: 'Honey Oat Cereal Box', icon: '🥣' },
-  { item_id: 'EGGS-DOZ-06', item_name: 'Pasture-Raised Eggs (Dozen)', icon: '🥚' }
-];
-
-const getProductName = (id) => {
-  const prod = PRODUCTS_CATALOG.find(p => p.item_id === id);
-  return prod ? `${prod.icon} ${prod.item_name}` : id;
-};
+import { getProductName } from '../../context/OrderContext.jsx';
 
 export default function ActiveRunUI({ orderId = 'demo-order', onBack = () => {}, items: propItems, onMarkAvailable, onMarkUnavailable }) {
   const [order, setOrder] = useState(null);
@@ -264,7 +251,7 @@ export default function ActiveRunUI({ orderId = 'demo-order', onBack = () => {},
                       {index + 1}
                     </span>
                     <h4 className="text-lg font-semibold text-slate-100 font-sans flex flex-wrap items-center gap-2">
-                      <span>{getProductName(item.item_id || item.name)}</span>
+                      <span>{getProductName(item.product_name || item.item_id || item.name)}</span>
                       {item.replacement_item_id && (
                         <span className="text-xs font-normal text-indigo-300 bg-indigo-500/10 border border-indigo-500/25 px-2.5 py-0.5 rounded-lg flex items-center gap-1">
                           🔄 Replaced with <strong className="text-indigo-200 font-semibold">{getProductName(item.replacement_item_id)}</strong>

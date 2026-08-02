@@ -1,6 +1,5 @@
 const supabase = require('../lib/supabaseClient');
 
-// Regex to validate standard UUIDs
 const isValidUUID = (id) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 
@@ -16,27 +15,37 @@ const getReadyOrders = async (req, res) => {
         total_amount,
         customer_id,
         picker_id,
-        store:store_table (
-          store_name
+        stores (
+          name
         )
       `)
-      .in('order_status', ['FINALIZED', 'ASSIGNED', 'picked', 'completed'])
-      .order('order_date', { ascending: true });
+      .in('order_status', ['FINALIZED', 'ASSIGNED', 'PICKED', 'COMPLETED', 'DELIVERED', 'order_confirmed', 'assigned_to_delivery', 'out_for_delivery', 'delivered'])
+      .order('order_date', { ascending: false });
 
     if (error) {
-      console.error('Supabase Query Error in getReadyOrders:', error);
+      console.error('[DATABASE_ERROR] Supabase Query Error in getReadyOrders:', error);
       return res.status(500).json({
         error: 'Internal Server Error',
-        message: 'Failed to retrieve ready orders from Supabase.'
+        message: 'Failed to retrieve ready orders from Supabase: ' + error.message
       });
     }
 
-    return res.status(200).json(data);
+    const formatted = (data || []).map(o => ({
+      order_id: o.order_id,
+      order_status: o.order_status,
+      order_date: o.order_date,
+      total_amount: parseFloat(o.total_amount) || 0,
+      customer_id: o.customer_id,
+      picker_id: o.picker_id,
+      store_name: o.stores?.name || 'QuickFix Grocery Store Hub'
+    }));
+
+    return res.status(200).json(formatted);
   } catch (err) {
-    console.error('Unexpected Error in getReadyOrders:', err);
+    console.error('[CRITICAL_ERROR] Unexpected Error in getReadyOrders:', err);
     return res.status(500).json({
       error: 'Internal Server Error',
-      message: 'An unexpected server error occurred.'
+      message: 'An unexpected server error occurred: ' + err.message
     });
   }
 };
@@ -45,7 +54,6 @@ const getReadyOrders = async (req, res) => {
 const deliverOrder = async (req, res) => {
   const { order_id } = req.params;
 
-  // 1. Validate UUID format
   if (!order_id || !isValidUUID(order_id)) {
     return res.status(400).json({
       error: 'Bad Request',
@@ -54,7 +62,6 @@ const deliverOrder = async (req, res) => {
   }
 
   try {
-    // 2. Query the order to check exists and verify current status
     const { data: order, error: queryError } = await supabase
       .from('order_table')
       .select('order_id, order_status')
@@ -68,24 +75,22 @@ const deliverOrder = async (req, res) => {
           message: `Order with ID ${order_id} does not exist.`
         });
       }
-      console.error('Supabase Query Error in deliverOrder:', queryError);
+      console.error('[DATABASE_ERROR] Supabase Query Error in deliverOrder:', queryError);
       return res.status(500).json({
         error: 'Internal Server Error',
-        message: 'Failed to query order details.'
+        message: 'Failed to query order details: ' + queryError.message
       });
     }
 
-    // 3. Constraint Check: Only update if current status is ready for delivery
     const currentStatus = (order.order_status || '').toUpperCase();
     const validReadyStatuses = ['FINALIZED', 'ASSIGNED', 'PICKED', 'COMPLETED'];
     if (!validReadyStatuses.includes(currentStatus)) {
-      return res.status(404).json({
+      return res.status(400).json({
         error: 'Conflict',
         message: `Order cannot be delivered. Status lifecycle restriction: current status is '${order.order_status}' but must be one of: ${validReadyStatuses.join(', ')}.`
       });
     }
 
-    // 4. Update the status to 'DELIVERED'
     const { data: updatedOrder, error: updateError } = await supabase
       .from('order_table')
       .update({ order_status: 'DELIVERED' })
@@ -94,20 +99,20 @@ const deliverOrder = async (req, res) => {
       .single();
 
     if (updateError) {
-      console.error('Supabase Update Error in deliverOrder:', updateError);
+      console.error('[DATABASE_ERROR] Supabase Update Error in deliverOrder:', updateError);
       return res.status(500).json({
         error: 'Internal Server Error',
-        message: 'Failed to finalize delivery status.'
+        message: 'Failed to finalize delivery status: ' + updateError.message
       });
     }
 
     return res.status(200).json(updatedOrder);
 
   } catch (err) {
-    console.error('Unexpected Error in deliverOrder:', err);
+    console.error('[CRITICAL_ERROR] Unexpected Error in deliverOrder:', err);
     return res.status(500).json({
       error: 'Internal Server Error',
-      message: 'An unexpected server error occurred.'
+      message: 'An unexpected server error occurred: ' + err.message
     });
   }
 };

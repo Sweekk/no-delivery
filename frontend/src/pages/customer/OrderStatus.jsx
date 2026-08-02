@@ -3,7 +3,7 @@ import { ArrowLeft, ShoppingBag, AlertCircle, RefreshCw, PackageCheck, Check, Be
 
 import { useOrders } from '../../context/OrderContext.jsx';
 import { ChooseReplacementModal } from '../../components/customer/ChooseReplacementModal.jsx';
-import { ConsolidatedUnavailableModal } from '../../components/customer/ConsolidatedUnavailableModal.jsx';
+import { BatchSubstitutionModal } from '../../components/customer/BatchSubstitutionModal.jsx';
 import { Toast } from '../../components/common/Toast.jsx';
 
 export const OrderStatus = ({ onBackToHome }) => {
@@ -92,7 +92,7 @@ export const OrderStatus = ({ onBackToHome }) => {
 
       {/* Single Consolidated Unavailable Items Modal */}
       {activeOrder.hasPendingNotification && activeOrder.consolidatedNotification && (
-        <ConsolidatedUnavailableModal
+        <BatchSubstitutionModal
           notification={activeOrder.consolidatedNotification}
           isOpen={isConsolidatedModalOpen}
           onClose={() => setIsConsolidatedModalOpen(false)}
@@ -253,82 +253,6 @@ export const OrderStatus = ({ onBackToHome }) => {
             </button>
           </div>
         )}
-
-        {/* SIMULATED PICKER DEMO CONTROL PANEL */}
-        <div className="bg-amber-50/80 rounded-3xl p-5 border border-amber-200 space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <RefreshCw className="w-4 h-4 text-amber-700" />
-              <h3 className="text-xs font-extrabold text-amber-900 uppercase tracking-wider">
-                Simulated Picker Controls (Order Picking Workflow)
-              </h3>
-            </div>
-            <span className="text-[11px] font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-200">
-              Checked: {checkedCount}/{activeOrder.items.length} items
-            </span>
-          </div>
-          <p className="text-xs text-amber-800 font-medium leading-relaxed">
-            Mark items as <strong>Available</strong> or <strong>Not Available</strong> during picking. Unavailable items trigger the 3-minute customer timer upon completing order picking.
-          </p>
-
-          {/* Item Picking Controls Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-            {activeOrder.items.map((item) => (
-              <div
-                key={item.id}
-                className="p-2.5 rounded-xl bg-white border border-amber-200/80 flex items-center justify-between gap-2 text-xs"
-              >
-                <div className="flex items-center gap-2 max-w-[150px] truncate">
-                  <span className="font-bold text-slate-900 truncate">{item.product.name}</span>
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  {item.pickingStatus === 'substituted' || item.pickingStatus === 'skipped' ? (
-                    <span className="px-2.5 py-1 rounded-lg text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                      {item.pickingStatus === 'substituted' ? '✓ Substituted' : '✗ Skipped'}
-                    </span>
-                  ) : (
-                    <>
-                      <button
-                        onClick={() => updateItemAvailability(activeOrder.id, item.id, 'available')}
-                        className={`px-2 py-1 rounded-lg text-[10px] font-bold transition cursor-pointer ${
-                          item.pickingStatus === 'available'
-                            ? 'bg-emerald-600 text-white'
-                            : 'bg-slate-100 text-emerald-700 hover:bg-emerald-100'
-                        }`}
-                      >
-                        ✓ Available
-                      </button>
-                      <button
-                        onClick={() => updateItemAvailability(activeOrder.id, item.id, 'not_available')}
-                        className={`px-2 py-1 rounded-lg text-[10px] font-bold transition cursor-pointer ${
-                          item.pickingStatus === 'not_available'
-                            ? 'bg-rose-600 text-white'
-                            : 'bg-slate-100 text-rose-700 hover:bg-rose-100'
-                        }`}
-                      >
-                        ✗ Not Available
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Finish Picking Button */}
-          <div className="pt-2 flex items-center justify-between border-t border-amber-200/60">
-            <div className="text-[11px] font-bold text-amber-900">
-              Internal count: <span className="text-rose-700 font-extrabold">{unavailableItemsCount} item(s)</span> flagged unavailable
-            </div>
-            <button
-              onClick={() => completeOrderPicking(activeOrder.id)}
-              className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-xs transition cursor-pointer flex items-center gap-1.5"
-            >
-              <Check className="w-4 h-4" />
-              <span>Complete Order Picking</span>
-            </button>
-          </div>
-        </div>
 
         {/* ORDER ITEMS LIST */}
         <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-5">

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import CompletionFooter from './CompletionFooter';
+import { getProductName } from '../../context/OrderContext.jsx';
 import './PickerUI.css';
 
 const DEFAULT_PICK_ITEMS = [
@@ -104,11 +105,13 @@ export default function ActivePickList({ orderId = 'ORD-94021', onBackToQueue })
           });
 
           const rawItems = data.items || [];
-          if (rawItems.length > 0) {
-            const enriched = rawItems.map((item, idx) => ({
-              ...item,
-              item_name: item.item_name || item.item_id || `Grocery Item ${idx + 1}`,
-              brand: item.brand || (idx % 2 === 0 ? 'Amul' : 'Nestle'),
+            const enriched = rawItems.map((item, idx) => {
+              const prodName = item.product_name || item.item_name || item.item_id || `Grocery Item ${idx + 1}`;
+              return {
+                ...item,
+                product_name: prodName,
+                item_name: prodName,
+                brand: item.brand || (idx % 2 === 0 ? 'Amul' : 'Nestle'),
               category: item.category || 'Dairy & Groceries',
               aisle: item.aisle || `Aisle A-0${(idx % 4) + 1}`,
               rack: item.rack || `Rack R-${10 + idx}`,
@@ -121,10 +124,10 @@ export default function ActivePickList({ orderId = 'ORD-94021', onBackToQueue })
                 idx === 1 && 'Fragile',
                 idx === 2 && 'Frozen',
                 idx === 3 && 'Heavy Item',
-              ].filter(Boolean),
-            }));
-            setItems(enriched);
-          }
+              ].filter(Boolean)
+            };
+          });
+          setItems(enriched);
         }
       } catch (err) {
         console.warn('Backend pick order fetch notice:', err);
@@ -277,10 +280,18 @@ export default function ActivePickList({ orderId = 'ORD-94021', onBackToQueue })
   };
 
   const totalItems = items.length;
-  const pickedCount = items.filter((i) => i.status !== 'pending').length;
+  const resolvedStatuses = ['found', 'not_found', 'replaced', 'awaiting_customer'];
+  const pickedCount = items.filter((i) => resolvedStatuses.includes(i.status)).length;
   const remainingCount = totalItems - pickedCount;
   const progressPercent = totalItems > 0 ? Math.round((pickedCount / totalItems) * 100) : 0;
   const totalOrderValue = items.reduce((sum, i) => sum + (parseFloat(i.price || 85) * (i.qty_requested || 1)), 0);
+
+  // Live picking accuracy = found / (found + not_found + replaced)
+  const foundCount = items.filter(i => i.status === 'found').length;
+  const notFoundCount = items.filter(i => i.status === 'not_found').length;
+  const replacedCount = items.filter(i => i.status === 'replaced').length;
+  const resolvedForAccuracy = foundCount + notFoundCount + replacedCount;
+  const pickingAccuracy = resolvedForAccuracy > 0 ? Math.round((foundCount / resolvedForAccuracy) * 100) : 100;
 
   return (
     <div className="picker-container">
@@ -407,7 +418,7 @@ export default function ActivePickList({ orderId = 'ORD-94021', onBackToQueue })
                 {/* Substituted Badge if replaced */}
                 {isReplaced && item.replacement_item_id && (
                   <div className="replacement-badge mt-2">
-                    🟨 Substituted with: <strong>{item.replacement_item_id}</strong>
+                    🟨 Substituted with: <strong>{getProductName(item.replacement_item_id)}</strong>
                   </div>
                 )}
 
@@ -495,7 +506,7 @@ export default function ActivePickList({ orderId = 'ORD-94021', onBackToQueue })
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-slate-500 font-medium">Picking Accuracy</span>
-                <span className="font-extrabold text-emerald-700">100%</span>
+                <span className={`font-extrabold ${pickingAccuracy >= 80 ? 'text-emerald-700' : pickingAccuracy >= 50 ? 'text-amber-600' : 'text-red-600'}`}>{pickingAccuracy}%</span>
               </div>
             </div>
 

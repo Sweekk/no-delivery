@@ -3,8 +3,8 @@ import OrderQueue from '../components/picker/OrderQueue';
 import ActivePickList from '../components/picker/ActivePickList';
 
 export default function PickerRun() {
-  // Default to active order ORD-94021 so the "Picking Order" page opens immediately!
-  const [activeOrderId, setActiveOrderId] = useState('ORD-94021');
+  // Default to null so Store Picker Order Queue opens on load
+  const [activeOrderId, setActiveOrderId] = useState(null);
 
   return (
     <div className="picker-page-wrapper space-y-4">

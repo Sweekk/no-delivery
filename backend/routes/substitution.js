@@ -8,5 +8,8 @@ router.get('/timer-status/:itemId', substitutionController.getTimerStatus);
 router.post('/respond', substitutionController.respondSubstitution);
 router.post('/finalize-picker-pick', substitutionController.finalizePickerPick);
 
-module.exports = router;
+// Additional endpoints
+router.get('/suggested/:itemId', substitutionController.getSuggestedSubstitute);
+router.post('/batch-respond', substitutionController.handleBatchDecisions);
 
+module.exports = router;

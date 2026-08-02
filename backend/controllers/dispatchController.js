@@ -8,12 +8,6 @@ exports.finalizeOrder = async (req, res) => {
 
 /**
  * Handles delivery partner assignment requests.
- * 
- * Defense-in-Depth Architecture:
- * 1. Controller-level gate check via finalizationService.isOrderFinalized().
- * 2. Application-level guard rail via dispatchGuard.assertOrderIsFinalized() executed directly
- *    before the database UPDATE call.
- * 3. Database-level BEFORE UPDATE trigger on orders table as hard stop.
  */
 exports.assignDeliveryPartner = async (req, res) => {
   try {
@@ -62,7 +56,6 @@ exports.assignDeliveryPartner = async (req, res) => {
       }
     }
 
-    // 3. Handle no available delivery partners (HTTP 503 Service Unavailable)
     if (!partner) {
       return res.status(503).json({
         error: 'No delivery partners available',
@@ -72,7 +65,6 @@ exports.assignDeliveryPartner = async (req, res) => {
 
     const assignedAt = new Date().toISOString();
 
-    // 4. Log timestamp for admin analytics
     console.log('[DISPATCH_ASSIGNMENT]', {
       orderId,
       assignedPartnerId: partner.id,
@@ -80,29 +72,28 @@ exports.assignDeliveryPartner = async (req, res) => {
       assignedAt,
     });
 
-    // 5. APPLICATION-LEVEL GUARD: Assert order is finalized right before DB write
+    // 3. Application-level Guard Check
     await assertOrderIsFinalized(orderId);
 
-    // 6. Update order record in Supabase (Protected by DB-level Trigger)
+    // 4. Update order record in Supabase
     const { error: orderUpdateErr } = await supabase
-      .from('orders')
+      .from('order_table')
       .update({
         assigned_partner_id: partner.id,
         delivery_partner_id: partner.id,
         assigned_at: assignedAt,
-        status: 'ASSIGNED',
+        order_status: 'ASSIGNED',
       })
-      .eq('id', orderId);
+      .eq('order_id', orderId);
 
     if (orderUpdateErr) {
-      // Database Trigger rejection or constraint violation
       return res.status(400).json({
         error: 'Delivery assignment blocked by database guard rail',
         details: orderUpdateErr.message,
       });
     }
 
-    // 7. Update delivery partner status to BUSY
+    // 5. Update delivery partner status to BUSY
     await supabase
       .from('delivery_partners')
       .update({ status: 'BUSY' })
@@ -133,6 +124,5 @@ exports.assignDeliveryPartner = async (req, res) => {
   }
 };
 
-// Alias for backwards compatibility
 exports.assignDriver = exports.assignDeliveryPartner;
 

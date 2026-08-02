@@ -1,9 +1,12 @@
 const express = require('express');
 const router = express.Router();
-const orderController = require('../controllers/orderController');
+const ordersController = require('../controllers/ordersController');
 
-// Routes for checkout and order payload management
-router.post('/', orderController.createOrder);
-router.get('/:id', orderController.getOrder);
+// Routes for Order Lifecycle Management
+router.post('/', ordersController.createOrder);
+router.get('/:id', ordersController.getOrderDetails);
+router.patch('/:id/status', ordersController.updateOrderStatus);
+router.patch('/:id/items/:itemId/status', ordersController.updateItemStatus);
+router.patch('/:id/items/:itemId/decision', ordersController.handleCustomerDecision);
 
 module.exports = router;
